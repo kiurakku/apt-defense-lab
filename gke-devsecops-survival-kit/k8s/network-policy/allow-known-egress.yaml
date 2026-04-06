@@ -1,0 +1,22 @@
+# Allows egress only to HTTPS (443) and DNS (53).
+# A "very specific C&C port" (e.g. 4444) is NOT listed — traffic to C&C is
+# blocked by default-deny + allow-list semantics (apply order per CNI).
+# TODO: tighten podSelector / namespace for production workloads.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-known-egress-only
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (not committed) and fill values.
+
+project_id = "YOUR_GCP_PROJECT_ID"
+region     = "europe-west1"
+
+github_org  = "your-github-org"
+github_repo = "gke-devsecops-survival-kit"
+
+# cicd_service_account_id = "cicd-sa"

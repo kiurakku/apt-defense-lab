@@ -1,0 +1,24 @@
+DevSecOps test task
+
+Intention of this task to evaluate whether you will be interested, motivated and skilled to perform core activities in the DevSecOps role You will be in charge to support security and IT teams to operate GCP/GKE hosted environments in a safe manner. For this purpose you will need to work with the following technology stack: 
+Opensource IDS/IPS solutions
+ELK stack
+Kubernetes/GKE/GCP security features
+BigQuery
+Terraform/Helm
+Federated Identity
+
+
+So here is the task. You need a trial GCP account. You need to protect your infrastructure from a Russian APT which is trying to use crypto mining and actively penetrating the cloud infrastructure. We know something about their tactics (creation of a “magic” file in the /tmp directory and backconnecting to their C&C center through a  very specific port). They stole a high power service account from one of the key software engineers and used it (therefore we blocked all service account keys and needed to use Federation). Good luck!
+Go to https://cloud.google.com/kubernetes-engine/security-bulletins
+Setup local K8 cluster with older version and demonstrate:
+Escape from container to host
+Crash of master plane interface
+Setup with terraform Github repo, GCP cloudbuild CI/CD pipeline:
+ the Trivy operator deployment on GKE with logs compression;
+ create the log sink to write those compressed logs to BQ table;
+Figure out what compression Trivy uses (should be very easy from its source code).
+Create a script which reads the compressed logs from BQ, extracts vulnerabilities and writes them clean into BQ table.
+Demonstrate the vulnerable github action which makes terraform plan and manage some GCP resource. It should be setup with some service account which has write permissions to modify the selected GCP resource and modify TF state bucket. When github action performs the ‘terraform plan’ on the PR you should be able to steal GCP token, modify the resource, modify the state, eventually execute tf apply, while you have only permission for PRs to make tf plan. There are many histories on the internet how researchers were hacking vulnerable github actions and gaining 10k$ rewards ;-) Use workload identity as with GCP SA it is completely trivial.
+
+Document the results in a short but accurately formatted report with screenshot proofs and few sentences of explanation for each task solution. Use Google doc and share the link for the report.

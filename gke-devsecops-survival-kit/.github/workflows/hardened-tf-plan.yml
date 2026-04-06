@@ -1,0 +1,43 @@
+# =============================================================================
+# HARDENED — PREFERRED PATTERN FOR PRODUCTION-LIKE CI
+# =============================================================================
+# Fix summary:
+# - Trigger on push to main only (not pull_request from forks), so untrusted
+#   code does not run with WIF in the same job.
+# - Use attribute_condition: attribute.ref == 'refs/heads/main' so the GitHub
+#   OIDC token is only accepted when the workflow ref is main.
+# =============================================================================
+name: hardened-tf-plan
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF — scoped to main)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          attribute_condition: "attribute.ref == 'refs/heads/main'"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -input=false

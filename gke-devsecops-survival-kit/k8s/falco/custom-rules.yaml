@@ -1,0 +1,36 @@
+# Falco custom rules for lab APT scenario (magic file in /tmp, C&C port, privileged mounts).
+# Duplicated in values.yaml → customRules.rules-apt-lab.yaml for `helm -f values.yaml`.
+# Edit here or in values.yaml and keep both in sync when changing rules.
+
+- macro: SPECIFIC_PORT
+  condition: (fd.sport = 4444 or fd.dport = 4444)
+
+- rule: APT tmp file drop
+  desc: Detect writes under /tmp inside a container (lab APT “magic file” scenario)
+  condition: >
+    container and
+    evt.type in (write, writev, rename, open, openat) and
+    fd.name startswith /tmp
+  output: "APT tmp file drop (user=%user.name container=%container.name proc=%proc.name file=%fd.name)"
+  priority: CRITICAL
+  tags: [container, filesystem, apt_lab]
+
+- rule: Reverse shell detected
+  desc: Outbound connection on SPECIFIC_PORT (reverse shell / C&C lab)
+  condition: >
+    container and
+    evt.type in (connect, accept) and
+    SPECIFIC_PORT
+  output: "Reverse shell / C&C port (container=%container.name proc=%proc.name fd=%fd.name dport=%fd.dport sport=%fd.sport)"
+  priority: CRITICAL
+  tags: [container, network, apt_lab]
+
+- rule: Container escape via privileged mount
+  desc: Container process interacting with host device node mount (escape class)
+  condition: >
+    container and
+    evt.type in (open, openat, mount) and
+    (fd.name startswith /dev/ or fd.name contains "kubelet")
+  output: "Privileged mount / device access (container=%container.name proc=%proc.name fd=%fd.name)"
+  priority: CRITICAL
+  tags: [container, escape, apt_lab]
