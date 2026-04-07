@@ -1,9 +1,21 @@
-project_id         = "your-gcp-project-id"
-region             = "us-central1"
-cluster_name       = "lab-cluster"
-github_org         = "your-github-org"
-github_repo        = "gke-devsecops-survival-kit"
-cicd_sa_name       = "cicd-sa"
-trivy_sa_name      = "trivy-sa"
-cloudbuild_sa_name = "cloudbuild-deployer"
-bq_dataset_id      = "trivy_logs"
+project_id   = "your-gcp-project-id"
+region       = "us-central1"
+cluster_name = "lab-cluster"
+
+github_org  = "your-github-org"
+github_repo = "gke-devsecops-survival-kit"
+
+# Must match workflow `name:` in .github/workflows/hardened-tf-plan.yml and hardened-tf-apply.yml
+github_hardened_plan_workflow   = "hardened-tf-plan"
+github_hardened_apply_workflow  = "hardened-tf-apply"
+
+# Existing bucket used for Terraform remote state (must exist before apply)
+tf_state_bucket_name = "tf-state-your-project-unique"
+
+cicd_lab_sa_name   = "cicd-lab-sa"
+cicd_plan_sa_name  = "cicd-plan-sa"
+cicd_apply_sa_name = "cicd-apply-sa"
+
+trivy_sa_name       = "trivy-sa"
+cloudbuild_sa_name  = "cloudbuild-deployer"
+bq_dataset_id       = "trivy_logs"

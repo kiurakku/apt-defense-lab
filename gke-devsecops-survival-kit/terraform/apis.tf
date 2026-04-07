@@ -6,6 +6,7 @@ locals {
     "sts.googleapis.com",
     "bigquery.googleapis.com",
     "cloudbuild.googleapis.com",
+    "artifactregistry.googleapis.com",
     "logging.googleapis.com",
     "cloudresourcemanager.googleapis.com",
   ]

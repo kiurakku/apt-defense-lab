@@ -28,6 +28,17 @@ resource "google_container_cluster" "lab_cluster" {
     workload_pool = "${var.project_id}.svc.id.goog"
   }
 
+  # NetworkPolicy CRDs enforced by GKE (requires Dataplane V2 or Calico; Standard uses addon).
+  network_policy {
+    enabled = true
+  }
+
+  addons_config {
+    network_policy_config {
+      disabled = false
+    }
+  }
+
   depends_on = [google_project_service.lab]
 }
 
