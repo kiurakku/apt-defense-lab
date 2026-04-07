@@ -141,13 +141,16 @@ Repository secrets:
 
 | Secret | Purpose |
 |--------|---------|
+| `GCP_PROJECT_ID` | GCP project id (same as `project_id` in `terraform.tfvars`; required for `terraform plan` in Actions) |
 | `WIF_PROVIDER_LAB` | `terraform output -raw wif_lab_provider_name` |
 | `WIF_PROVIDER_PROD` | `terraform output -raw wif_prod_provider_name` |
 | `CICD_LAB_SA_EMAIL` | `cicd_lab_sa_email` |
 | `CICD_PLAN_SA_EMAIL` | `cicd_plan_sa_email` |
 | `CICD_APPLY_SA_EMAIL` | `cicd_apply_sa_email` |
-| `TF_STATE_BUCKET` | GCS bucket for remote state (no `gs://` prefix) |
+| `TF_STATE_BUCKET` | GCS bucket for remote state and for `tf_state_bucket_name` in Terraform (no `gs://` prefix) |
 | `DEMO_IMPACT_BUCKET` | `terraform output -raw demo_impact_bucket` (for `hardened-tf-apply` only) |
+
+Workflows set `TF_VAR_github_org` / `TF_VAR_github_repo` from the GitHub repository automatically (must match `github_org` / `github_repo` used when you applied Terraform/WIF).
 
 - `vulnerable-tf-plan.yml` — `pull_request` (forks); lab pool WIF → `cicd-lab-sa`
 - `hardened-tf-plan.yml` — `push` to `main`; prod pool WIF → `cicd-plan-sa` (strict provider in Terraform: repo + `refs/heads/main` + workflow allowlist)

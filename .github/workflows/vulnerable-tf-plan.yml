@@ -15,6 +15,11 @@ permissions:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    env:
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_github_org: ${{ github.repository_owner }}
+      TF_VAR_github_repo: ${{ github.event.repository.name }}
+      TF_VAR_tf_state_bucket_name: ${{ secrets.TF_STATE_BUCKET }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,7 +43,12 @@ jobs:
 
       - name: Terraform Plan
         working-directory: terraform
-        run: terraform plan -input=false
+        run: |
+          if [ -z "${TF_VAR_project_id}" ]; then
+            echo "Add repository secret GCP_PROJECT_ID (your GCP project id)."
+            exit 1
+          fi
+          terraform plan -input=false
 
       # ATTACKER STEP — what a malicious fork would add:
       # - name: Exfiltrate token

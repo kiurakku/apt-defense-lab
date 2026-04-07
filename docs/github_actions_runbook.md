@@ -20,9 +20,12 @@
 
 | Secret | Приклад призначення |
 |--------|---------------------|
+| `GCP_PROJECT_ID` | id GCP-проєкту (як у `terraform.tfvars` → `project_id`) |
 | `WIF_PROVIDER_PROD` | `terraform output -raw wif_prod_provider_name` |
 | `CICD_PLAN_SA_EMAIL` | `terraform output -raw cicd_plan_sa_email` |
-| `TF_STATE_BUCKET` | ім’я bucket без `gs://` |
+| `TF_STATE_BUCKET` | ім’я bucket без `gs://` (те саме, що `tf_state_bucket_name` у Terraform) |
+
+`github_org` / `github_repo` у CI підставляються з репозиторію автоматично; вони мають збігатися з тим, що було в `terraform apply` при створенні WIF.
 
 **Що перевірити в логах run:** крок **Authenticate to Google Cloud**, потім **`terraform init`**, **`terraform plan`** — успіх.
 
@@ -61,6 +64,7 @@ gcloud storage cat gs://YOUR_DEMO_BUCKET/demo-write-proof.txt
 
 | Secret | |
 |--------|--|
+| `GCP_PROJECT_ID` | той самий project id, що в `terraform.tfvars` |
 | `WIF_PROVIDER_LAB` | `terraform output -raw wif_lab_provider_name` |
 | `CICD_LAB_SA_EMAIL` | `terraform output -raw cicd_lab_sa_email` |
 | `TF_STATE_BUCKET` | той самий remote state bucket |

@@ -1,9 +1,10 @@
+# Also set GitHub Actions secret GCP_PROJECT_ID to this value for terraform plan in CI.
 project_id   = "your-gcp-project-id"
 region       = "us-central1"
 cluster_name = "lab-cluster"
 
 github_org  = "your-github-org"
-github_repo = "gke-devsecops-survival-kit"
+github_repo = "apt-defense-lab"
 
 # Must match workflow `name:` in .github/workflows/hardened-tf-plan.yml and hardened-tf-apply.yml
 github_hardened_plan_workflow   = "hardened-tf-plan"
