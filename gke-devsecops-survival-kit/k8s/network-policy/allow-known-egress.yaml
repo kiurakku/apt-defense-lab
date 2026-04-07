@@ -1,7 +1,6 @@
-# Allows egress only to HTTPS (443) and DNS (53).
-# A "very specific C&C port" (e.g. 4444) is NOT listed — traffic to C&C is
-# blocked by default-deny + allow-list semantics (apply order per CNI).
-# TODO: tighten podSelector / namespace for production workloads.
+# Allows only HTTPS and DNS; everything else (including C&C) is blocked when
+# combined with default-deny NetworkPolicy semantics for the same pods.
+# Port 4444 (C&C) is not in this list — blocked by deny-all above.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

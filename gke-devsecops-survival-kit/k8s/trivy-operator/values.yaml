@@ -1,37 +1,27 @@
-# -----------------------------------------------------------------------------
-# Helm chart: aquasecurity/trivy-operator
-# Upstream defaults: Chart.yaml version 0.32.1, appVersion 0.30.1 (verify with repo)
-#   helm repo add aquasecurity https://aquasecurity.github.io/helm-charts/
-#   helm repo update
-#   helm show chart aquasecurity/trivy-operator --version 0.32.1
-# Install:
-#   kubectl apply -f namespace.yaml
-#   helm install trivy-operator aquasecurity/trivy-operator -n trivy-system \
-#     --version 0.32.1 -f values.yaml
-#
-# Vulnerability scanning is toggled under `operator` (not a top-level `trivyOperator` flag).
-# Compression of scan job / report payloads: see `trivyOperator.scanJobCompressLogs` and
-# operator source (pkg/compress) — JSON → gzip → base64 in CR annotations / ConfigMaps.
-# -----------------------------------------------------------------------------
+# aquasecurity/trivy-operator chart 0.32.1
+# helm install trivy-operator aquasecurity/trivy-operator -n trivy-system --version 0.32.1 -f values.yaml
 
 operator:
-  # Enable vulnerability scanner (VulnerabilityReport CRs)
   vulnerabilityScannerEnabled: true
+  scanJobsConcurrentLimit: 2
 
 trivyOperator:
-  # Keep compressed logs for BigQuery / log pipeline experiments
-  scanJobCompressLogs: true
+  vulnerabilityReportsPlugin: "Trivy"
 
 trivy:
-  # Show all CVEs including those without a vendor fix
   ignoreUnfixed: false
-  # TODO: pin trivy.image.tag to match chart-tested Trivy (see chart default values)
+  severity: "CRITICAL,HIGH,MEDIUM"
 
 serviceAccount:
   create: true
+  name: trivy-operator
   annotations:
-    iam.gke.io/gcp-service-account: "TODO@PROJECT_ID.iam.gserviceaccount.com"
+    iam.gke.io/gcp-service-account: "trivy-sa@YOUR_GCP_PROJECT_ID.iam.gserviceaccount.com"
 
-# TODO: optional — pin operator Deployment to a node pool (top-level key in this chart)
-# nodeSelector:
-#   cloud.google.com/gke-nodepool: hardened-pool
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "100m"
+    memory: "128Mi"

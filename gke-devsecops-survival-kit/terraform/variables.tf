@@ -1,17 +1,12 @@
 variable "project_id" {
-  description = "GCP project ID for the lab"
+  description = "GCP project ID"
   type        = string
 }
 
 variable "region" {
-  description = "GCP region for GKE and related resources"
+  description = "GCP region for GKE and regional resources"
   type        = string
-}
-
-variable "zone" {
-  description = "GCP zone for zonal node pools (if used)"
-  type        = string
-  default     = null
+  default     = "us-central1"
 }
 
 variable "cluster_name" {
@@ -21,19 +16,35 @@ variable "cluster_name" {
 }
 
 variable "github_org" {
-  description = "GitHub org or user for Workload Identity Federation audience"
+  description = "GitHub organization or user (for WIF attribute mapping)"
   type        = string
-  default     = "TODO_GITHUB_ORG"
 }
 
 variable "github_repo" {
-  description = "GitHub repository name for WIF attribute mapping"
+  description = "GitHub repository name (for WIF attribute mapping)"
   type        = string
-  default     = "TODO_REPO"
 }
 
-variable "cicd_service_account_id" {
-  description = "Service account ID (without domain) for CI/CD and WIF"
+variable "cicd_sa_name" {
+  description = "GCP service account ID (without domain) for GitHub Actions / Terraform CI"
   type        = string
   default     = "cicd-sa"
+}
+
+variable "trivy_sa_name" {
+  description = "GCP service account ID (without domain) for Trivy operator Workload Identity"
+  type        = string
+  default     = "trivy-sa"
+}
+
+variable "cloudbuild_sa_name" {
+  description = "GCP service account ID (without domain) for Cloud Build deployment pipeline"
+  type        = string
+  default     = "cloudbuild-deployer"
+}
+
+variable "bq_dataset_id" {
+  description = "BigQuery dataset ID for Trivy logs"
+  type        = string
+  default     = "trivy_logs"
 }

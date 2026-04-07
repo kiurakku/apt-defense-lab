@@ -1,0 +1,28 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s
+
+substitutions:
+  _DATASET: trivy_logs
+  _LIMIT: "1000"
+
+steps:
+  - id: install deps
+    name: python:3.11-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        pip install --no-cache-dir -r scripts/requirements.txt
+
+  - id: parse trivy logs
+    name: python:3.11-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        python scripts/parse_trivy_bq.py \
+          --project "${PROJECT_ID}" \
+          --dataset "${_DATASET}" \
+          --limit "${_LIMIT}"

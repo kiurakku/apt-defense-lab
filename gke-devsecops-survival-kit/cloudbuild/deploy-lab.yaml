@@ -1,0 +1,122 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 3600s
+
+substitutions:
+  _REGION: us-central1
+  _CLUSTER_NAME: lab-cluster
+  _GITHUB_ORG: REPLACE_ME
+  _GITHUB_REPO: REPLACE_ME
+  _DATASET: trivy_logs
+  _TF_STATE_BUCKET: REPLACE_ME
+  _TF_STATE_PREFIX: terraform/state
+  _TRIVY_GSA_EMAIL: trivy-sa@REPLACE_ME.iam.gserviceaccount.com
+
+steps:
+  - id: render tfvars
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cat > terraform/ci.auto.tfvars <<EOF
+        project_id    = "${PROJECT_ID}"
+        region        = "${_REGION}"
+        cluster_name  = "${_CLUSTER_NAME}"
+        github_org    = "${_GITHUB_ORG}"
+        github_repo   = "${_GITHUB_REPO}"
+        bq_dataset_id = "${_DATASET}"
+        EOF
+
+  - id: terraform init
+    name: hashicorp/terraform:1.7.5
+    dir: terraform
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        terraform init -input=false \
+          -backend-config="bucket=${_TF_STATE_BUCKET}" \
+          -backend-config="prefix=${_TF_STATE_PREFIX}"
+        terraform validate
+
+  - id: terraform apply
+    name: hashicorp/terraform:1.7.5
+    dir: terraform
+    entrypoint: sh
+    args:
+      - -ceu
+      - |
+        terraform apply -input=false -auto-approve
+
+  - id: get credentials
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud container clusters get-credentials "${_CLUSTER_NAME}" \
+          --region "${_REGION}" \
+          --project "${PROJECT_ID}"
+
+  - id: install trivy operator
+    name: alpine/helm:3.14.4
+    entrypoint: /bin/sh
+    env:
+      - KUBECONFIG=/builder/home/.kube/config
+    args:
+      - -ceu
+      - |
+        helm repo add aqua https://aquasecurity.github.io/helm-charts/
+        helm repo update
+        helm upgrade --install trivy-operator aqua/trivy-operator \
+          --namespace trivy-system \
+          --create-namespace \
+          --version 0.32.1 \
+          -f k8s/trivy-operator/values.yaml \
+          --set-string 'serviceAccount.annotations.iam\.gke\.io/gcp-service-account'="${_TRIVY_GSA_EMAIL}"
+
+  - id: enable trivy compression
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        bash scripts/configure_trivy_log_compression.sh
+
+  - id: install falco
+    name: alpine/helm:3.14.4
+    entrypoint: /bin/sh
+    env:
+      - KUBECONFIG=/builder/home/.kube/config
+    args:
+      - -ceu
+      - |
+        helm repo add falcosecurity https://falcosecurity.github.io/charts
+        helm repo update
+        helm upgrade --install falco falcosecurity/falco \
+          --namespace falco \
+          --create-namespace \
+          --version 8.0.1 \
+          -f k8s/falco/values.yaml
+
+  - id: apply network policies
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        kubectl apply -f k8s/network-policy/deny-egress-default.yaml
+        kubectl apply -f k8s/network-policy/allow-known-egress.yaml
+
+  - id: create log sink
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    env:
+      - PROJECT_ID=${PROJECT_ID}
+      - DATASET=${_DATASET}
+    args:
+      - -ceu
+      - |
+        bash scripts/log_sink_setup.sh

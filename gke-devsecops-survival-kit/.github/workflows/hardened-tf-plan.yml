@@ -1,12 +1,9 @@
-# =============================================================================
-# HARDENED — PREFERRED PATTERN FOR PRODUCTION-LIKE CI
-# =============================================================================
-# Fix summary:
-# - Trigger on push to main only (not pull_request from forks), so untrusted
-#   code does not run with WIF in the same job.
-# - Use attribute_condition: attribute.ref == 'refs/heads/main' so the GitHub
-#   OIDC token is only accepted when the workflow ref is main.
-# =============================================================================
+# ✅ HARDENED VERSION
+# Changes vs vulnerable:
+# 1. Trigger: push to main only (not PRs from forks)
+# 2. WIF attribute_condition includes assertion.ref == 'refs/heads/main'
+#    (must be applied in Terraform: google_iam_workload_identity_pool_provider.github_provider)
+# 3. Explicit branch protection assumed on main
 name: hardened-tf-plan
 
 on:
@@ -24,11 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud (WIF — scoped to main)
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          service_account: ${{ secrets.CICD_SA_EMAIL }}
           attribute_condition: "attribute.ref == 'refs/heads/main'"
 
       - name: Setup Terraform
@@ -36,7 +33,12 @@ jobs:
 
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="prefix=terraform/state"
 
       - name: Terraform Plan
         working-directory: terraform

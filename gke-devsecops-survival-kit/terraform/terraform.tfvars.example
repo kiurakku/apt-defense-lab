@@ -1,9 +1,9 @@
-# Copy to terraform.tfvars (not committed) and fill values.
-
-project_id = "YOUR_GCP_PROJECT_ID"
-region     = "europe-west1"
-
-github_org  = "your-github-org"
-github_repo = "gke-devsecops-survival-kit"
-
-# cicd_service_account_id = "cicd-sa"
+project_id         = "your-gcp-project-id"
+region             = "us-central1"
+cluster_name       = "lab-cluster"
+github_org         = "your-github-org"
+github_repo        = "gke-devsecops-survival-kit"
+cicd_sa_name       = "cicd-sa"
+trivy_sa_name      = "trivy-sa"
+cloudbuild_sa_name = "cloudbuild-deployer"
+bq_dataset_id      = "trivy_logs"

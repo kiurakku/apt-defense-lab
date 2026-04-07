@@ -1,0 +1,13 @@
+# Copy to backend.hcl (do not commit), set bucket and bucket location in GCP, then init.
+#
+# Windows PowerShell — use quotes around `-backend-config=...` (avoids "Too many command line arguments"):
+#   terraform init "-backend-config=backend.hcl"
+#
+# Bash / cmd:
+#   terraform init -backend-config=backend.hcl
+#
+# GCS backend needs Application Default Credentials (after gcloud is installed):
+#   gcloud auth application-default login
+#
+bucket = "YOUR_TF_STATE_BUCKET"
+prefix = "terraform/state"

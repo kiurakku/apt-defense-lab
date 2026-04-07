@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-Read compressed Trivy-related rows from BigQuery, decode, and write clean vulnerabilities.
+Trivy BQ Log Parser
+====================
+Trivy operator stores VulnerabilityReport data compressed:
+  1. Report JSON is serialized
+  2. Compressed with gzip
+  3. Encoded as base64
+  4. Stored in k8s CR annotation / ConfigMap, then shipped to Cloud Logging
 
-Trivy operator serializes VulnerabilityReport to JSON, gzips it, base64-encodes it,
-then stores the blob in the CR's annotation / ConfigMap (see operator source: pkg/compress).
-
-This script expects `raw_compressed_logs.log_data` to hold base64(gzip(JSON)).
-The JSON shape follows Trivy scan output: Results[].Vulnerabilities[] with fields such as
-VulnerabilityID, Severity, PkgName, InstalledVersion.
+This script:
+  1. Reads raw compressed rows from BQ table `raw_compressed_logs`
+  2. base64-decodes → gunzips → json.loads each row
+  3. Extracts vulnerabilities from Results[].Vulnerabilities[]
+  4. Inserts clean rows into `clean_vulnerabilities` table
 """
 
 from __future__ import annotations
@@ -27,14 +32,13 @@ LOGGER = logging.getLogger("parse_trivy_bq")
 
 
 def decode_blob(raw: str) -> dict[str, Any]:
-    """Base64-decode, gunzip, parse JSON."""
+    """Decode base64(gzip(JSON)) to a dict."""
     compressed = base64.b64decode(raw)
     text = gzip.decompress(compressed).decode("utf-8")
     return json.loads(text)
 
 
 def iter_vulnerabilities(payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
-    """Yield flattened vulnerability dicts from Trivy JSON."""
     results = payload.get("Results") or []
     if not isinstance(results, list):
         return
@@ -50,7 +54,6 @@ def iter_vulnerabilities(payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
 
 
 def _ts_for_bq(ts: Any) -> str:
-    """Serialize timestamps for BigQuery JSON insert."""
     if ts is None:
         return datetime.now(timezone.utc).isoformat()
     if isinstance(ts, datetime):
@@ -60,15 +63,25 @@ def _ts_for_bq(ts: Any) -> str:
     return str(ts)
 
 
-def run(project: str, dataset: str, raw_table: str, clean_table: str) -> int:
+def run(
+    project: str,
+    dataset: str,
+    raw_table: str,
+    clean_table: str,
+    limit: int,
+) -> int:
     client = bigquery.Client(project=project)
     raw_fq = f"`{project}.{dataset}.{raw_table}`"
     clean_fq = f"{project}.{dataset}.{clean_table}"
 
+    if limit < 1 or limit > 10_000_000:
+        raise ValueError("limit must be between 1 and 10000000")
+
     query = f"""
-        SELECT timestamp, log_data
+        SELECT insert_time, namespace, report_name, log_data
         FROM {raw_fq}
         WHERE log_data IS NOT NULL
+        LIMIT {limit}
     """
 
     rows_to_insert: list[dict[str, Any]] = []
@@ -76,14 +89,16 @@ def run(project: str, dataset: str, raw_table: str, clean_table: str) -> int:
     try:
         job = client.query(query)
         for row in job.result():
-            ts = row["timestamp"]
+            ins = row["insert_time"] or datetime.now(timezone.utc)
+            ns = row["namespace"]
+            report_name = row["report_name"]
             raw = row["log_data"]
             if raw is None:
                 continue
             try:
                 data = decode_blob(str(raw))
             except (OSError, ValueError, json.JSONDecodeError) as exc:
-                LOGGER.warning("Skip row at %s: decode failed: %s", ts, exc)
+                LOGGER.warning("Skip row (report=%s): %s", report_name, exc)
                 continue
 
             image = (
@@ -92,23 +107,26 @@ def run(project: str, dataset: str, raw_table: str, clean_table: str) -> int:
                 or data.get("image")
                 or ""
             )
-            namespace = data.get("Namespace") or data.get("namespace") or ""
+            ns_val = data.get("Namespace") or data.get("namespace") or ns or ""
 
             for vuln in iter_vulnerabilities(data):
                 rows_to_insert.append(
                     {
-                        "timestamp": _ts_for_bq(ts),
+                        "insert_time": _ts_for_bq(ins),
+                        "namespace": str(ns_val) if ns_val is not None else None,
+                        "report_name": str(report_name) if report_name else None,
+                        "image": str(image),
                         "vulnerability_id": vuln.get("VulnerabilityID", ""),
                         "severity": vuln.get("Severity", ""),
                         "pkg_name": vuln.get("PkgName", ""),
-                        "pkg_version": vuln.get("InstalledVersion", ""),
-                        "image": str(image),
-                        "namespace": str(namespace),
+                        "installed_version": vuln.get("InstalledVersion", ""),
+                        "fixed_version": vuln.get("FixedVersion", ""),
+                        "title": vuln.get("Title", ""),
                     }
                 )
 
         if not rows_to_insert:
-            LOGGER.info("No vulnerability rows produced; nothing to insert.")
+            LOGGER.info("No vulnerability rows to insert.")
             return 0
 
         errors = client.insert_rows_json(clean_fq, rows_to_insert)
@@ -118,7 +136,6 @@ def run(project: str, dataset: str, raw_table: str, clean_table: str) -> int:
 
         LOGGER.info("Inserted %s rows into %s", len(rows_to_insert), clean_fq)
         return 0
-
     except Exception:
         LOGGER.exception("Pipeline failed")
         return 1
@@ -130,6 +147,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dataset", default="trivy_logs", help="BigQuery dataset ID")
     p.add_argument("--raw-table", default="raw_compressed_logs", help="Source table")
     p.add_argument("--clean-table", default="clean_vulnerabilities", help="Destination table")
+    p.add_argument("--limit", type=int, default=1000, help="Max raw rows to process")
     p.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
     return p.parse_args()
 
@@ -145,6 +163,7 @@ def main() -> int:
         dataset=args.dataset,
         raw_table=args.raw_table,
         clean_table=args.clean_table,
+        limit=args.limit,
     )
 
 

