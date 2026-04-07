@@ -50,7 +50,7 @@ resource "google_iam_workload_identity_pool_provider" "github_lab_provider" {
     "attribute.actor"      = "assertion.actor"
     "attribute.ref"        = "assertion.ref"
     "attribute.repository" = "assertion.repository"
-    "attribute.workflow" = "assertion.workflow"
+    "attribute.workflow"   = "assertion.workflow"
   }
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -78,7 +78,7 @@ resource "google_iam_workload_identity_pool_provider" "github_prod_provider" {
     "attribute.actor"      = "assertion.actor"
     "attribute.ref"        = "assertion.ref"
     "attribute.repository" = "assertion.repository"
-    "attribute.workflow" = "assertion.workflow"
+    "attribute.workflow"   = "assertion.workflow"
   }
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"

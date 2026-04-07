@@ -8,20 +8,13 @@ substitutions:
   _LIMIT: "1000"
 
 steps:
-  - id: install deps
-    name: python:3.11-slim
-    entrypoint: bash
-    args:
-      - -ceu
-      - |
-        pip install --no-cache-dir -r scripts/requirements.txt
-
   - id: parse trivy logs
     name: python:3.11-slim
     entrypoint: bash
     args:
       - -ceu
       - |
+        pip install --no-cache-dir -r scripts/requirements.txt
         python scripts/parse_trivy_bq.py \
           --from-sink \
           --project "${PROJECT_ID}" \

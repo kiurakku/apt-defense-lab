@@ -17,7 +17,8 @@ resource "google_container_cluster" "lab_cluster" {
   name     = var.cluster_name
   location = var.region
 
-  remove_default_node_pool = true
+  # Keep imported clusters stable; create managed lab pools separately.
+  remove_default_node_pool = false
   initial_node_count       = 1
 
   networking_mode = "VPC_NATIVE"
@@ -43,10 +44,11 @@ resource "google_container_cluster" "lab_cluster" {
 }
 
 resource "google_container_node_pool" "vulnerable_pool" {
-  provider = google-beta
-  name     = "vulnerable-pool"
-  cluster  = google_container_cluster.lab_cluster.name
-  location = var.region
+  provider       = google-beta
+  name           = "vulnerable-pool"
+  cluster        = google_container_cluster.lab_cluster.name
+  location       = var.region
+  node_locations = var.gke_node_locations
 
   node_count = 1
   version    = "1.27.16-gke.1800"
@@ -54,7 +56,7 @@ resource "google_container_node_pool" "vulnerable_pool" {
   node_config {
     machine_type    = "e2-medium"
     image_type      = "COS_CONTAINERD"
-    preemptible     = true
+    spot            = false
     service_account = google_service_account.gke_nodes.email
 
     oauth_scopes = [
@@ -73,17 +75,18 @@ resource "google_container_node_pool" "vulnerable_pool" {
 }
 
 resource "google_container_node_pool" "hardened_pool" {
-  provider = google-beta
-  name     = "hardened-pool"
-  cluster  = google_container_cluster.lab_cluster.name
-  location = var.region
+  provider       = google-beta
+  name           = "hardened-pool"
+  cluster        = google_container_cluster.lab_cluster.name
+  location       = var.region
+  node_locations = var.gke_node_locations
 
   node_count = 1
 
   node_config {
     machine_type    = "e2-medium"
     image_type      = "COS_CONTAINERD"
-    preemptible     = true
+    spot            = false
     service_account = google_service_account.gke_nodes.email
 
     oauth_scopes = [

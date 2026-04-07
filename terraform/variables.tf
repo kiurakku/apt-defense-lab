@@ -15,6 +15,12 @@ variable "cluster_name" {
   default     = "lab-cluster"
 }
 
+variable "gke_node_locations" {
+  description = "Preferred zones for managed node pools to reduce regional stockout during lab provisioning"
+  type        = list(string)
+  default     = ["us-central1-b"]
+}
+
 variable "github_org" {
   description = "GitHub organization or user (for WIF attribute mapping)"
   type        = string
