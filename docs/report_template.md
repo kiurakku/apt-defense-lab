@@ -96,7 +96,7 @@ Parser expands `Results[].Vulnerabilities[]` into normalized rows.
 **Parser command:**
 
 ```bash
-python scripts/parse_trivy_bq.py --project PROJECT_ID --dataset trivy_logs --limit 1000
+python scripts/parse_trivy_bq.py --project PROJECT_ID --dataset trivy_logs --from-sink --limit 1000
 ```
 
 [Screenshot: `clean_vulnerabilities` preview]

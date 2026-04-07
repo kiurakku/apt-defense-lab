@@ -23,6 +23,7 @@ steps:
       - -ceu
       - |
         python scripts/parse_trivy_bq.py \
+          --from-sink \
           --project "${PROJECT_ID}" \
           --dataset "${_DATASET}" \
           --limit "${_LIMIT}"

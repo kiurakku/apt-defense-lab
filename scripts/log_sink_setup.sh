@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# DEPRECATED for this repo: use Terraform `terraform/logging.tf` (google_logging_project_sink.trivy_operator).
+# Running this script after Terraform will create a DUPLICATE sink with the same filter → duplicate BigQuery costs.
+# Kept only for emergency manual recreation or labs without Terraform.
+
 # Usage: PROJECT_ID=my-project DATASET=trivy_logs bash log_sink_setup.sh
 
 : "${PROJECT_ID:?Set PROJECT_ID}"

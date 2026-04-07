@@ -10,18 +10,20 @@
                     (A) CI/CD path (GitHub Actions → GCP)
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ GitHub repo                                                               │
-│  - vulnerable workflow: pull_request (forks)                              │
-│  - hardened workflow: push to main                                        │
+│  - vulnerable: pull_request → WIF lab pool (лише repository)              │
+│  - hardened plan: push main → WIF prod pool (repo + ref + workflow)       │
+│  - hardened apply: workflow_dispatch → cicd-apply-sa, лише demo GCS bucket  │
 └───────────────┬───────────────────────────────────────────────────────────┘
                 │ OIDC (id-token: write)
                 ▼
-        Workload Identity Federation (WIF)
-  google_iam_workload_identity_pool + provider (github-provider)
+        Workload Identity Federation — два pool:
+        github-lab-pool / github-prod-pool + окремі providers
                 │ STS exchange
                 ▼
-        GCP Service Account: cicd-sa
-        - roles/storage.admin (tf state bucket)
-        - roles/compute.viewer (demo API access)
+        GCP SA: cicd-lab-sa | cicd-plan-sa | cicd-apply-sa
+        - state bucket: objectUser для lab + plan (terraform init/plan)
+        - demo bucket: objectAdmin лише для lab + apply (контрольований impact)
+        - project: roles/viewer для lab + plan (terraform refresh)
 
 
                      (B) Runtime path (GKE Pod → GCP)
@@ -42,13 +44,13 @@
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ Cloud Logging                                                             │
 │  - k8s_container logs for trivy-operator                                   │
-│     │ Log Router sink (scripts/log_sink_setup.sh)                          │
+│     │ Log Router sink (terraform/logging.tf → managed BQ tables)           │
 │     ▼                                                                      │
 │ BigQuery dataset: trivy_logs (US)                                          │
-│  - raw_compressed_logs (base64(gzip(JSON)) як log_data)                    │
+│  - авто-таблиці sink (схема Cloud Logging) + raw_compressed_logs (лабораторна)│
 │  - clean_vulnerabilities (нормалізовані CVE рядки)                         │
 │     ▲                                                                      │
-│ scripts/parse_trivy_bq.py                                                  │
+│ parse_trivy_bq.py --from-sink (sink tables) або raw_compressed_logs        │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -62,7 +64,7 @@
     - `hardened-pool`: Shielded VM (`secure_boot`, `integrity_monitoring`) як “blue team” ціль.
   - **BigQuery**: dataset + таблиці для сирих/очищених даних.
   - **Workload Identity (GKE)**: прив’язка KSA `trivy-system/trivy-operator` → GSA `trivy-sa`.
-  - **WIF (GitHub OIDC)**: пул/провайдер для GitHub Actions → `cicd-sa` (вразливий vs hardened варіант).
+  - **WIF (GitHub OIDC)**: два pool (lab vs prod), три SA (`cicd-lab`, `cicd-plan`, `cicd-apply`), окремий demo GCS bucket для write-демонстрацій.
 
 - **Helm / Kubernetes (`k8s/`)**
   - **Trivy Operator**: генерує `VulnerabilityReport` та журнальні/репортні payload-и (gzip+base64) для pipeline.
@@ -70,8 +72,9 @@
   - **NetworkPolicy**: deny-all egress + allowlist (443/53), блокування C2 через “відсутність дозволу”.
 
 - **Скрипти (`scripts/`)**
-  - `log_sink_setup.sh`: створює Log Router sink на BigQuery + видає IAM на dataset.
-  - `parse_trivy_bq.py`: читає `raw_compressed_logs`, декодує base64→gzip→JSON, пише в `clean_vulnerabilities`.
+  - `bq_sink_inspect.py`: схема + sample row з таблиць sink; опційно рядок у `raw_compressed_logs`.
+  - `parse_trivy_bq.py`: з `--from-sink` читає таблиці експорту Logging; інакше — `raw_compressed_logs`; пише в `clean_vulnerabilities`.
+  - `log_sink_setup.sh`: застарілий ручний sink (дублює Terraform — не запускати разом).
 
 - **Експлойти (`exploits/`)**
   - `container_escape/escape.sh`: демонструє **клас** CVE-2022-0492 (cgroup v1 `release_agent`) і показує proof-файл.
@@ -90,9 +93,9 @@
 
 ### 2) Hardened CI (цільовий стан)
 
-- Trigger **лише** `push` на `main`.
-- WIF provider `attribute_condition` включає **repo + ref** (`refs/heads/main`).
-- Додатково: мінімізувати ролі SA, розділити `plan` і `apply` SAs, pin Actions by SHA.
+- **Plan**: `push` на `main`, prod pool WIF: **repo + ref + allowlist workflow** (`hardened-tf-plan` / `hardened-tf-apply`).
+- **Apply**: окремий SA з write лише на **demo bucket**; workflow не виконує повний `terraform apply` (лише `gcloud storage cp` proof-об’єкт).
+- Додатково: pin Actions by SHA, branch protection на `main`.
 
 ### 3) Runtime + Egress controls
 
@@ -128,7 +131,7 @@
 3. `terraform init` → `terraform apply` (створить GKE, BQ, SAs, WIF).
 4. `kubectl` credentials до кластера.
 5. Helm install Trivy operator (з анотацією на `trivy-sa`) та Falco.
-6. Налаштувати Log Router sink → BigQuery.
-7. Дочекатися даних у `raw_compressed_logs`, запустити `parse_trivy_bq.py`.
+6. `terraform apply` уже створює Log Router sink (`logging.tf`); дочекатися рядків у авто-таблицях dataset.
+7. `python scripts/parse_trivy_bq.py --project … --dataset trivy_logs --from-sink` (або `bq_sink_inspect.py` для діагностики).
 8. Провести демонстрації (експлойти) лише в lab-контурі.
 

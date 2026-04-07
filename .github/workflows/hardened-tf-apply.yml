@@ -1,0 +1,32 @@
+# Hardened "apply" — cicd-apply-sa writes only to the demo GCS bucket (no full terraform apply).
+# Full stack apply should run locally or via a separate admin pipeline.
+name: hardened-tf-apply
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  demo-write:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (prod WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER_PROD }}
+          service_account: ${{ secrets.CICD_APPLY_SA_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Demo write only (gs://…/demo-write-proof.txt)
+        env:
+          DEMO_BUCKET: ${{ secrets.DEMO_IMPACT_BUCKET }}
+        run: |
+          test -n "$DEMO_BUCKET"
+          echo "hardened-apply $(date -u +%Y-%m-%dT%H:%M:%SZ)" | gcloud storage cp - "gs://${DEMO_BUCKET}/demo-write-proof.txt"

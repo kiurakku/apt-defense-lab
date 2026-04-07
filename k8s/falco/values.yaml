@@ -27,6 +27,9 @@ customRules:
     - list: known_network_tools
       items: [curl, wget, dig, nslookup, nc]
 
+    - macro: apt_magic_filename
+      condition: fd.name endswith apt-magic-staging.txt
+
     - rule: APT Malware TMP File Drop
       desc: Detects file creation in /tmp inside a container — known APT staging tactic
       condition: >
@@ -41,15 +44,25 @@ customRules:
       priority: CRITICAL
       tags: [apt, malware, container]
 
+    - rule: APT Magic Filename Staging
+      desc: Specific magic file name dropped under /tmp (lab IOC)
+      condition: >
+        container and open_write and apt_magic_filename
+      output: >
+        APT magic file staging
+        (user=%user.name container=%container.name file=%fd.name proc=%proc.name cmdline=%proc.cmdline)
+      priority: CRITICAL
+      tags: [apt, malware, container, ioc]
+
     - rule: Reverse Shell C2 Connection
-      desc: Outbound TCP connection on common reverse shell ports from inside a container
+      desc: Outbound TCP connection to common reverse shell destination ports from inside a container
       condition: >
         outbound and container and
-        fd.sport in (4444, 4445, 1337, 31337) and
+        fd.dport in (4444, 4445, 1337, 31337) and
         not proc.name in (known_network_tools)
       output: >
         Possible reverse shell C2 connection
         (user=%user.name container=%container.name image=%container.image.repository
-         connection=%fd.name proc=%proc.name cmdline=%proc.cmdline)
+         connection=%fd.name proc=%proc.name dport=%fd.dport cmdline=%proc.cmdline)
       priority: CRITICAL
       tags: [apt, reverse-shell, c2, container]
