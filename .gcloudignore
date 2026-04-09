@@ -1,0 +1,27 @@
+# Cloud Build source upload — keep small; docker build does not need the whole repo tree.
+.gcloudignore
+.git
+
+# Local Python / tooling (often huge)
+.venv/
+venv/
+**/.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Terraform state (not needed for image build)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# IDE / OS
+.cursor/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Optional large artifacts (add if present)
+*.zip
+*.tar.gz

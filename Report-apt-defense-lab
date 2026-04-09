@@ -1,0 +1,194 @@
+Звіт: apt-defense-lab (технічне тестове завдання)
+
+Після вставки в Google Docs: виділи рядки розділів (1–7, Додаток) і застосуй «Заголовок 1» або «Заголовок 2»; таблиці за бажанням збери через «Вставка → Таблиця» за зразком нижче або залиш списками.
+
+
+Титульні дані
+
+Автор: Cloud9's
+Дата: 09.04.2026
+GCP Project ID: devsecopstests
+Репозиторій: https://github.com/kiurakku/apt-defense-lab
+Посилання на Google Doc (після публікації): [встав сюди посилання з доступом «Anyone with the link»]
+
+
+1. Executive Summary
+
+Побудовано ізольоване технічне тестове середовище в GCP (лише GKE Standard) для демонстрації сценарію на кшталт APT: вихід за межі контейнера, деградація доступу до API сервера кластера, підготовка активності в /tmp, зворотні з’єднання на типові порти C2, а також зловживання Workload Identity Federation (WIF) у GitHub Actions.
+
+Охоплені області:
+1) Container escape — PoC для класу CVE-2022-0492 (узгоджено з бюлетенями GKE).
+2) Control-plane stress — масове створення об’єктів API для демонстрації деградації kubectl / планувальника.
+3) Trivy → BigQuery — оператор Trivy, стислі логи, Log Router sink у BigQuery, парсер у таблицю clean_vulnerabilities.
+4) Вразливий CI — terraform plan на PR з WIF до cicd-lab-sa; поряд захищений шлях (main → cicd-plan-sa, контрольований apply → cicd-apply-sa та demo bucket).
+
+Захист: Falco (кастомні правила), NetworkPolicy (default-deny egress + allowlist), WIF замість JSON-ключів сервісних акаунтів, Shielded nodes на hardened-pool.
+
+Примітка щодо стеку з ТЗ: повний ELK не розгортався; телеметрія вразливостей і логів реалізована через Cloud Logging → BigQuery та runtime-детекцію Falco.
+
+Докази: скріншоти за розділами нижче. Детальний чекліст зняття скрінів також у файлі репозиторію docs/google_docs_submission_guide_uk.md.
+
+
+2. Огляд інфраструктури
+
+Кластер: lab-cluster (GKE Standard).
+
+Node pools:
+• vulnerable-pool — старіший образ вузла для демонстрації ризиків.
+• hardened-pool — Shielded VM, актуальніший базовий образ.
+
+BigQuery: dataset trivy_logs (sink від Cloud Logging, таблиці clean_vulnerabilities, raw_compressed_logs, керовані таблиці експорту логів).
+
+Сервісні акаунти: trivy-sa (GKE Workload Identity); cicd-lab-sa / cicd-plan-sa / cicd-apply-sa (GitHub WIF); cloudbuild-deployer (Cloud Build).
+
+
+2.1 Скріншоти інфраструктури (встав зображення під кожним блоком)
+
+S-GKE-1 — що на скріні: кластер lab-cluster, видно обидва пули vulnerable-pool та hardened-pool.
+Де взяти: GCP Console → Kubernetes Engine → Clusters → lab-cluster → вкладка NODE POOLS (або список пулів).
+Підпис (приклад): Розділення вузлів на вразливий демо-пул і захищений пул у одному кластері.
+
+S-BQ-1 — що на скріні: dataset trivy_logs, список таблиць (sink-таблиці, clean_vulnerabilities тощо).
+Де взяти: BigQuery → Explorer → проєкт devsecopstests → dataset trivy_logs.
+Підпис (приклад): Сховище BigQuery для експорту логів і нормалізованих вразливостей.
+
+
+3. Task 1. Container escape та навантаження на API сервер
+
+Узгодження з ТЗ: окремий локальний Kubernetes (minikube/kind) не використовувався; «старіша» конфігурація моделюється окремим node pool на GKE (розділ 2).
+
+
+3.1 Container escape (CVE-2022-0492)
+
+PoC: exploits/container_escape/escape.sh. Експлуатація орієнтована на поди на vulnerable-pool (деталі в README експлойту). На жорстко налаштованому GKE можливе блокування — це прийнятний доказ, якщо коротко пояснити причину (наприклад cgroup v2, політики вузла).
+
+S-ESC-1 — що на скріні: вивід скрипта в терміналі (успіх або чітке повідомлення про блок).
+Де взяти: після gcloud container clusters get-credentials … запустити bash exploits/container_escape/escape.sh у контексті з README.
+Підпис (приклад): Результат PoC escape: доказ на хості або очікуване блокування на захищеному вузлі.
+
+
+3.2 Control-plane stress (навантаження на API)
+
+Скрипт: exploits/master_plane_crash/dos_apiserver.sh. Параметр COUNT регулює інтенсивність.
+
+S-DOS-1 — що на скріні: початок або фрагмент виконання, видно створення ConfigMap / цикл.
+Де взяти: COUNT=200 bash exploits/master_plane_crash/dos_apiserver.sh default (або менше для демо).
+
+S-DOS-2 (опційно) — що на скріні: порівняння часу kubectl до і після навантаження.
+Де взяти: time kubectl get nodes до і після (два скріни або один з поясненням).
+
+Підпис (приклад): Навантаження на API сервер через масове створення об’єктів; деградація відгуку керуючої площини для оператора.
+
+
+4. Task 2. Terraform, Cloud Build, Trivy, BigQuery
+
+Terraform описує кластер, BigQuery, sink, WIF, IAM для Cloud Build. Розгортання в кластері — через Cloud Build і образ lab-ci/ci-deploy (файли cloudbuild/cloudbuild.yaml, далі cloudbuild/deploy-gke-apps.yaml).
+
+
+4.1 Cloud Build
+
+S-CB-1 — що на скріні: успішний білд з cloudbuild/cloudbuild.yaml (збірка/пуш образу ci-deploy).
+Де взяти: GCP → Cloud Build → History → успішний run → зелені кроки. Або вивід gcloud builds list --limit=5.
+
+S-CB-2 — що на скріні: успішний білд з cloudbuild/deploy-gke-apps.yaml (Helm Trivy/Falco, мережеві політики).
+Де взяти: Cloud Build → History; у логах видно helm та apply_network_policies.sh.
+
+S-CB-3 (опційно) — що на скріні: успішний run-trivy-parser.yaml або термінал з парсером (див. пункт 4.3).
+
+
+4.2 Trivy: компресія логів
+
+Формат: gzip, далі base64 у транспорті/логах; у парсері — розпаковка після декодування. У конфігурації оператора: scanJob.compressLogs: true.
+
+S-TRIVY-1 — що на скріні: фрагмент YAML з compressLogs: true.
+Де взяти: kubectl get cm trivy-operator-config -n trivy-system -o yaml.
+
+S-BQ-3 (опційно) — що на скріні: один рядок sink-таблиці або вивід інспектора схеми/зразка.
+Де взяти: python scripts/bq_sink_inspect.py --project devsecopstests --dataset trivy_logs або BigQuery → таблиця stdout_YYYYMMDD / stderr_YYYYMMDD → Preview одного рядка (без зайвих секретів).
+
+Підпис (приклад): Підтвердження стиснення логів сканування та наявність сирих записів у експорті Logging → BigQuery.
+
+
+4.3 Парсер BigQuery (scripts/parse_trivy_bq.py)
+
+Скрипт читає рядки експорту Cloud Logging (прапорець --from-sink), витягує вразливості й записує у clean_vulnerabilities.
+
+Команда для прикладу у звіті (одним рядком у моноширинному шрифті в Docs):
+
+python scripts/parse_trivy_bq.py --project devsecopstests --dataset trivy_logs --from-sink --limit 20000
+
+Очікуваний рядок у логу для скріншота: Inserted N rows into … clean_vulnerabilities (у фактичному прогоні N = 181 — підстав актуальне число).
+
+S-BQ-2 — що на скріні: Preview таблиці clean_vulnerabilities (колонки CVE, severity, пакет, версії).
+Де взяти: BigQuery → trivy_logs → clean_vulnerabilities → Preview.
+
+Підпис (приклад): Нормалізовані записи вразливостей після парсингу логів sink.
+
+
+5. Task 3. GitHub Actions і Workload Identity Federation
+
+Вразливий сценарій: .github/workflows/vulnerable-tf-plan.yml на pull_request → WIF pool lab → cicd-lab-sa.
+
+Захищений сценарій: hardened-tf-plan.yml на push у main → pool prod → cicd-plan-sa.
+
+Контрольований write: hardened-tf-apply.yml (workflow_dispatch) → cicd-apply-sa записує лише об’єкт у demo bucket (наприклад demo-write-proof.txt), без повного terraform apply у CI.
+
+Секрети в GitHub: GCP_PROJECT_ID, WIF_PROVIDER_LAB, WIF_PROVIDER_PROD, CICD_LAB_SA_EMAIL, CICD_PLAN_SA_EMAIL, CICD_APPLY_SA_EMAIL, TF_STATE_BUCKET, DEMO_IMPACT_BUCKET (деталі в README репозиторію).
+
+
+5.1 Скріншоти GitHub та доказ impact
+
+S-GH-1 — успішний run vulnerable-tf-plan на Pull Request. Де: GitHub → Actions → workflow → run з PR.
+
+S-GH-2 — успішний run hardened-tf-plan після push у main. Де: Actions → останній зелений run на main.
+
+S-GH-3 — успішний hardened-tf-apply (ручний Run workflow). Де: Actions → workflow_dispatch → зелений статус.
+
+S-GH-4 — крок Authenticate to Google Cloud з успіхом (без повного показу токенів). Де: всередині job → крок auth.
+
+S-DEMO-1 — файл demo-write-proof.txt у demo bucket або вміст через CLI. Де: Cloud Storage → bucket з terraform output demo_impact_bucket → об’єкт або gcloud storage cat gs://BUCKET/demo-write-proof.txt.
+
+S-IMP-1 (опційно) — доказ прав lab SA на state/demo без зайвих секретів.
+
+Підпис для S-DEMO-1 (приклад): Контрольований write через WIF prod pool і cicd-apply-sa у демонстраційний bucket.
+
+
+6. Захисні засоби: Falco та NetworkPolicy
+
+Falco: правила на запис у /tmp (у тому числі «magic» ім’я файлу) та підозрілі вихідні TCP-порти (C2).
+
+NetworkPolicy: default-deny egress і allow-known-egress у потрібних namespace (скрипт apply_network_policies.sh у репозиторії).
+
+S-FALCO-1 — що на скріні: рядок у логах Falco після тестової дії.
+Де взяти: kubectl logs -n falco -l app.kubernetes.io/name=falco --tail=200.
+
+S-NP-1 — що на скріні: список політик у кластері.
+Де взяти: kubectl get networkpolicy -A.
+
+S-NP-2 (опційно) — перевірка egress (наприклад 443 дозволено, «поганий» порт заблоковано) — короткий тест і скрін або опис.
+
+Примітка: допоміжний под node-collector (Job) може залишатися Pending через прив’язку до конкретної ноди та CPU; на роботу Trivy Operator і Task 2 це не знімає, якщо оператор Running і дані в BigQuery є — згадай одним реченням у тексті або підписом до скріну списку подів.
+
+
+7. Висновок
+
+Найвищий системний ризик у сценарії — порушення межі довіри CI/CD: отримання облікових даних GCP через WIF за недостатньо суворих умов для pull request. Runtime-моніторинг (Falco), NetworkPolicy, оновлення вузлів і суворіші attribute_condition для WIF знижують ризик у продакшені.
+
+Рекомендації: моніторинг і реагування; обмеження egress; оновлення GKE за офіційними security bulletins (https://cloud.google.com/kubernetes-engine/security-bulletins); WIF з перевіркою repo, ref і workflow; пін комітів GitHub Actions за SHA.
+
+
+Додаток A. Чекліст скріншотів перед здачею
+
+Познач після вставки зображень у документ:
+
+☐ S-GKE-1, S-BQ-1
+☐ S-ESC-1 або S-DOS-1 (мінімум один з Task 1)
+☐ S-CB-1, S-CB-2, S-TRIVY-1, S-BQ-2 (після парсера — якщо є рядки)
+☐ опційно: S-BQ-3, S-CB-3
+☐ S-GH-1, S-GH-2, S-GH-3, S-GH-4, S-DEMO-1
+☐ S-FALCO-1 або S-NP-1
+
+Правила: під кожним скріном — одне речення контексту; не показувати повні OIDC URL, ключі сервісних акаунтів, повні access token. За потреби експортуй документ у PDF з меню Файл у Google Docs.
+
+
+Кінець звіту.
