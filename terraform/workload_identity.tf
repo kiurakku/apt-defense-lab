@@ -137,7 +137,10 @@ resource "google_project_iam_custom_role" "tf_gcs_iam_policy_reader" {
   role_id     = "tfGcsIamPolicyReader"
   title       = "Terraform: read GCS bucket IAM policy"
   description = "Minimal permission so CI terraform plan can refresh bucket IAM bindings"
-  permissions = ["storage.buckets.getIamPolicy"]
+  permissions = [
+    "storage.buckets.get",
+    "storage.buckets.getIamPolicy",
+  ]
 }
 
 resource "google_project_iam_member" "cicd_plan_gcs_iam_policy_reader" {
