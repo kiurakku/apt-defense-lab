@@ -130,6 +130,20 @@ resource "google_project_iam_member" "cicd_lab_viewer" {
   member  = "serviceAccount:${google_service_account.cicd_lab.email}"
 }
 
+# Terraform plan/refresh reads bucket IAM policies for `google_storage_bucket_iam_member`.
+# Grant read-only Storage viewer at the project to avoid failing on storage.buckets.getIamPolicy.
+resource "google_project_iam_member" "cicd_plan_storage_viewer" {
+  project = var.project_id
+  role    = "roles/storage.viewer"
+  member  = "serviceAccount:${google_service_account.cicd_plan.email}"
+}
+
+resource "google_project_iam_member" "cicd_lab_storage_viewer" {
+  project = var.project_id
+  role    = "roles/storage.viewer"
+  member  = "serviceAccount:${google_service_account.cicd_lab.email}"
+}
+
 # Apply SA: demo bucket write only (see hardened-tf-apply.yml — no full terraform apply).
 
 # Lab SA: state bucket + demo bucket only (no project storage.admin).

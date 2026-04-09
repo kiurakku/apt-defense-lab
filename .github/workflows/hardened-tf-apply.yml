@@ -9,6 +9,10 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  # GitHub is deprecating Node.js 20 for JS actions; opt-in to Node 24 now.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   demo-write:
     runs-on: ubuntu-latest
