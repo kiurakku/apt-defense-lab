@@ -1,11 +1,11 @@
 #Requires -Version 5.1
 <#
-  Доказові перевірки для gke-devsecops-survival-kit (після deploy).
+  Доказові перевірки для технічного тестового завдання apt-defense-lab (після deploy).
   Заповніть змінні середовища або передайте параметри.
 #>
 param(
   [string] $ProjectId = $env:GCP_PROJECT,
-  [string] $Region = "us-central1",
+  [string] $ClusterLocation = "us-central1-b",
   [string] $Cluster = "lab-cluster",
   [string] $TfStateBucket = $env:TF_STATE_BUCKET,
   [string] $DemoBucket = $env:DEMO_IMPACT_BUCKET,
@@ -28,7 +28,7 @@ try {
 
 Write-Host "`n=== 2. GKE кластер ===" 
 try {
-  gcloud container clusters describe $Cluster --region $Region --project $ProjectId 2>&1 | Out-Null
+  gcloud container clusters describe $Cluster --location $ClusterLocation --project $ProjectId 2>&1 | Out-Null
   if ($LASTEXITCODE -eq 0) { Ok "кластер $Cluster" } else { Fail "кластер $Cluster недоступний" }
 } catch { Fail $_ }
 

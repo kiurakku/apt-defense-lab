@@ -15,13 +15,27 @@ resource "google_project_iam_member" "gke_nodes_log_writer" {
 resource "google_container_cluster" "lab_cluster" {
   provider = google-beta
   name     = var.cluster_name
-  location = var.region
+  location = var.cluster_location
 
-  # Keep imported clusters stable; create managed lab pools separately.
+  deletion_protection      = false
   remove_default_node_pool = false
   initial_node_count       = 1
 
   networking_mode = "VPC_NATIVE"
+
+  node_config {
+    machine_type    = "e2-small"
+    image_type      = "COS_CONTAINERD"
+    service_account = google_service_account.gke_nodes.email
+
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/cloud-platform",
+    ]
+
+    workload_metadata_config {
+      mode = "GKE_METADATA"
+    }
+  }
 
   ip_allocation_policy {}
 
@@ -44,17 +58,16 @@ resource "google_container_cluster" "lab_cluster" {
 }
 
 resource "google_container_node_pool" "vulnerable_pool" {
-  provider       = google-beta
-  name           = "vulnerable-pool"
-  cluster        = google_container_cluster.lab_cluster.name
-  location       = var.region
-  node_locations = var.gke_node_locations
+  provider = google-beta
+  name     = "vulnerable-pool"
+  cluster  = google_container_cluster.lab_cluster.name
+  location = var.cluster_location
 
   node_count = 1
-  version    = "1.27.16-gke.1800"
 
   node_config {
-    machine_type    = "e2-medium"
+    disk_size_gb    = 30
+    machine_type    = "e2-small"
     image_type      = "COS_CONTAINERD"
     spot            = false
     service_account = google_service_account.gke_nodes.email
@@ -70,21 +83,20 @@ resource "google_container_node_pool" "vulnerable_pool" {
 
   management {
     auto_repair  = true
-    auto_upgrade = false
+    auto_upgrade = true
   }
 }
 
 resource "google_container_node_pool" "hardened_pool" {
-  provider       = google-beta
-  name           = "hardened-pool"
-  cluster        = google_container_cluster.lab_cluster.name
-  location       = var.region
-  node_locations = var.gke_node_locations
+  provider = google-beta
+  name     = "hardened-pool"
+  cluster  = google_container_cluster.lab_cluster.name
+  location = var.cluster_location
 
   node_count = 1
 
   node_config {
-    machine_type    = "e2-medium"
+    machine_type    = "e2-small"
     image_type      = "COS_CONTAINERD"
     spot            = false
     service_account = google_service_account.gke_nodes.email

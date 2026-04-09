@@ -6,7 +6,7 @@
 # Default _IMAGE_TAG=latest is pushed by cloudbuild.yaml alongside SHORT_SHA.
 #
 # Trigger: set service account to terraform output cloudbuild_sa_email (or cloudbuild_sa_resource_name per GCP docs).
-# Substitutions: _TRIVY_GSA_EMAIL (terraform output trivy_sa_email), _REGION, _CLUSTER_NAME.
+# Substitutions: _TRIVY_GSA_EMAIL (terraform output trivy_sa_email), _REGION, _CLUSTER_LOCATION, _CLUSTER_NAME.
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -15,6 +15,7 @@ timeout: 1800s
 
 substitutions:
   _REGION: us-central1
+  _CLUSTER_LOCATION: us-central1-b
   _CLUSTER_NAME: lab-cluster
   _REPO: lab-ci
   _IMAGE: ci-deploy
@@ -36,7 +37,7 @@ steps:
           exit 1
         fi
         gcloud container clusters get-credentials "${_CLUSTER_NAME}" \
-          --region "${_REGION}" \
+          --location "${_CLUSTER_LOCATION}" \
           --project "${PROJECT_ID}"
 
         helm repo add aqua https://aquasecurity.github.io/helm-charts/

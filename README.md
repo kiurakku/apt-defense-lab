@@ -1,10 +1,24 @@
-# gke-devsecops-survival-kit
+# apt-defense-lab
 
-GKE security lab I built for a DevSecOps test task. Covers container escape PoCs, Trivy → BigQuery log pipeline, and a deliberately broken GitHub Actions WIF setup to demonstrate token theft.
+**Технічне тестове завдання** (APT / DevSecOps на GCP): GKE, Terraform, GitHub Actions (Workload Identity Federation), Trivy → BigQuery, Falco, NetworkPolicy, навмисно вразливий CI-шлях для демонстрації ризиків.
+
+**Індекс документації (українською):** [`docs/README.md`](docs/README.md)
+
+## Структура репозиторію
+
+| Шлях | Призначення |
+|------|-------------|
+| `terraform/` | Інфраструктура GCP (GKE, BQ, WIF, sink, SA) |
+| `.github/workflows/` | `hardened-tf-plan`, `vulnerable-tf-plan`, `hardened-tf-apply` |
+| `k8s/` | Helm values / маніфести (Trivy, Falco, NetworkPolicy) |
+| `cloudbuild/` | Образ CI + `deploy-gke-apps` + `run-trivy-parser` |
+| `scripts/` | Парсер BQ, мережеві політики, перевірки |
+| `docs/` | Архітектура, runbook, evidence, звіт |
+| `exploits/` | PoC (escape, DoS, WIF) — лише в ізольованому середовищі для завдання |
 
 ```
 GitHub (fork PR)
-    │  vulnerable WIF (lab pool: repo only)
+    │  vulnerable WIF (pool `github-lab-pool`: лише repo)
     ▼
 GCP CI service account (cicd-lab-sa)
     │
@@ -42,9 +56,11 @@ Log Router sink → BigQuery (managed export tables)
 ```bash
 cd terraform
 cp terraform.tfvars.example terraform.tfvars
-# Required: project_id, region, github_org, github_repo, tf_state_bucket_name,
-# github_hardened_plan_workflow / github_hardened_apply_workflow (must match workflow `name:` in YAML)
+# Заповніть: project_id, github_org, github_repo (мають збігатися з репо / WIF),
+# tf_state_bucket_name, за потреби workflow-імена (як у .github/workflows/*.yml).
 ```
+
+Після першого **`terraform apply`** додайте в GitHub **Actions → Secrets** значення **`GCP_PROJECT_ID`** = той самий `project_id`, інакше **`terraform plan`** у CI завершиться помилкою про required variables.
 
 Remote state (GCS): створіть bucket (через консоль GCP або `gcloud`), заповніть `bucket` у `backend.hcl` (скопійованому з `backend.hcl.example`, файл у `.gitignore`).
 
@@ -103,7 +119,7 @@ pip install -r requirements.txt
 python parse_trivy_bq.py --project YOUR_PROJECT --dataset trivy_logs --from-sink
 ```
 
-- **From lab table** `raw_compressed_logs` (legacy path):
+- **З таблиці** `raw_compressed_logs` (додатковий шлях у завданні):
 
 ```bash
 python parse_trivy_bq.py --project YOUR_PROJECT --dataset trivy_logs
@@ -125,9 +141,9 @@ Recommended: trigger on `main` for `deploy-gke-apps.yaml` using `terraform outpu
 
 GitHub App ↔ Cloud Build connection is left to you (tenant-specific); not hardcoded in Terraform.
 
-## Exploits (lab only)
+## Exploits (лише для виконання тестового завдання)
 
-Each has its own README under `exploits/`. Run only against the `vulnerable-pool`.
+У кожного сценарію — README в `exploits/`. Запускайте лише на `vulnerable-pool` у своєму тестовому проєкті.
 
 - `container_escape/` — CVE-2022-0492 cgroup escape + privileged mount
 - `master_plane_crash/` — API server resource exhaustion
@@ -152,7 +168,7 @@ Repository secrets:
 
 Workflows set `TF_VAR_github_org` / `TF_VAR_github_repo` from the GitHub repository automatically (must match `github_org` / `github_repo` used when you applied Terraform/WIF).
 
-- `vulnerable-tf-plan.yml` — `pull_request` (forks); lab pool WIF → `cicd-lab-sa`
+- `vulnerable-tf-plan.yml` — `pull_request` (forks); WIF-пул для вразливого сценарію → `cicd-lab-sa`
 - `hardened-tf-plan.yml` — `push` to `main`; prod pool WIF → `cicd-plan-sa` (strict provider in Terraform: repo + `refs/heads/main` + workflow allowlist)
 - `hardened-tf-apply.yml` — `workflow_dispatch`; prod pool → `cicd-apply-sa` writes **only** `gs://DEMO_IMPACT_BUCKET/demo-write-proof.txt` (no full Terraform apply)
 
@@ -167,6 +183,6 @@ Workflows set `TF_VAR_github_org` / `TF_VAR_github_repo` from the GitHub reposit
 
 ## Report
 
-- `docs/submission_report.md` — Google-Docs-ready report text
-- `docs/evidence_checklist.md` — screenshot checklist for final submission
-- `docs/evidence_gcp_runs.md` — how to collect **real** Cloud Build + BigQuery parser proof in GCP
+- **`docs/README.md`** — індекс усієї документації
+- **`docs/google_docs_submission_guide_uk.md`** — структура звіту в Google Docs, **усі скріншоти** та як їх отримати (українською)
+- `docs/submission_report.md` — чернетка тексту звіту (EN)

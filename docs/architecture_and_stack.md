@@ -1,6 +1,8 @@
-# Архітектура та стек — `gke-devsecops-survival-kit`
+# Архітектура та стек — apt-defense-lab
 
-Цей документ описує загальну архітектуру, ключові потоки (CI→GCP, Pod→GCP, Logs→BQ) та технологічний стек/версії в проєкті.
+Цей документ описує загальну архітектуру, ключові потоки (CI→GCP, Pod→GCP, Logs→BQ) та технологічний стек/версії. Репозиторій **кореневий** (`terraform/`, `.github/workflows/` у корені проєкту).
+
+**GitHub Actions:** у workflow для `terraform plan` передаються `TF_VAR_*` (у т.ч. `project_id`, `tf_state_bucket_name`, `github_org`/`github_repo` з контексту репозиторію). Деталі — `docs/github_actions_runbook.md` та кореневий `README.md` (таблиця секретів).
 
 ---
 
@@ -10,7 +12,7 @@
                     (A) CI/CD path (GitHub Actions → GCP)
 ┌───────────────────────────────────────────────────────────────────────────┐
 │ GitHub repo                                                               │
-│  - vulnerable: pull_request → WIF lab pool (лише repository)              │
+│  - vulnerable: pull_request → WIF pool `github-lab-pool` (лише repository) │
 │  - hardened plan: push main → WIF prod pool (repo + ref + workflow)       │
 │  - hardened apply: workflow_dispatch → cicd-apply-sa, лише demo GCS bucket  │
 └───────────────┬───────────────────────────────────────────────────────────┘
@@ -21,9 +23,9 @@
                 │ STS exchange
                 ▼
         GCP SA: cicd-lab-sa | cicd-plan-sa | cicd-apply-sa
-        - state bucket: objectUser для lab + plan (terraform init/plan)
-        - demo bucket: objectAdmin лише для lab + apply (контрольований impact)
-        - project: roles/viewer для lab + plan (terraform refresh)
+        - state bucket: objectUser для cicd-lab + cicd-plan (terraform init/plan)
+        - demo bucket: objectAdmin лише для cicd-lab + cicd-apply (контрольований impact)
+        - project: roles/viewer для cicd-lab + cicd-plan (terraform refresh)
 
 
                      (B) Runtime path (GKE Pod → GCP)
@@ -47,7 +49,7 @@
 │     │ Log Router sink (terraform/logging.tf → managed BQ tables)           │
 │     ▼                                                                      │
 │ BigQuery dataset: trivy_logs (US)                                          │
-│  - авто-таблиці sink (схема Cloud Logging) + raw_compressed_logs (лабораторна)│
+│  - авто-таблиці sink (схема Cloud Logging) + raw_compressed_logs (тестове)│
 │  - clean_vulnerabilities (нормалізовані CVE рядки)                         │
 │     ▲                                                                      │
 │ parse_trivy_bq.py --from-sink (sink tables) або raw_compressed_logs        │
@@ -64,7 +66,7 @@
     - `hardened-pool`: Shielded VM (`secure_boot`, `integrity_monitoring`) як “blue team” ціль.
   - **BigQuery**: dataset + таблиці для сирих/очищених даних.
   - **Workload Identity (GKE)**: прив’язка KSA `trivy-system/trivy-operator` → GSA `trivy-sa`.
-  - **WIF (GitHub OIDC)**: два pool (lab vs prod), три SA (`cicd-lab`, `cicd-plan`, `cicd-apply`), окремий demo GCS bucket для write-демонстрацій.
+  - **WIF (GitHub OIDC)**: два pool (вразливий сценарій `github-lab-pool` vs `github-prod-pool`), три SA (`cicd-lab`, `cicd-plan`, `cicd-apply`), окремий demo GCS bucket для write-демонстрацій у завданні.
 
 - **Helm / Kubernetes (`k8s/`)**
   - **Trivy Operator**: генерує `VulnerabilityReport` та журнальні/репортні payload-и (gzip+base64) для pipeline.
@@ -89,7 +91,7 @@
 
 - **Передумова**: workflow запускається на `pull_request` (включно з fork) + `id-token: write`.
 - **Помилка довіри**: WIF provider перевіряє лише `assertion.repository`, але **не** вимагає `assertion.ref == 'refs/heads/main'`.
-- **Наслідок**: fork PR може отримати Google access token для `cicd-sa` під час `terraform plan` та виконувати API-виклики в межах ролей SA.
+- **Наслідок**: fork PR може отримати Google access token для **`cicd-lab-sa`** під час `terraform plan` та виконувати API-виклики в межах ролей SA.
 
 ### 2) Hardened CI (цільовий стан)
 
@@ -133,5 +135,5 @@
 5. Helm install Trivy operator (з анотацією на `trivy-sa`) та Falco.
 6. `terraform apply` уже створює Log Router sink (`logging.tf`); дочекатися рядків у авто-таблицях dataset.
 7. `python scripts/parse_trivy_bq.py --project … --dataset trivy_logs --from-sink` (або `bq_sink_inspect.py` для діагностики).
-8. Провести демонстрації (експлойти) лише в lab-контурі.
+8. Провести демонстрації (експлойти) лише в ізольованому середовищі тестового завдання.
 

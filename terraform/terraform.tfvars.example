@@ -1,7 +1,8 @@
 # Also set GitHub Actions secret GCP_PROJECT_ID to this value for terraform plan in CI.
-project_id   = "your-gcp-project-id"
-region       = "us-central1"
-cluster_name = "lab-cluster"
+project_id        = "your-gcp-project-id"
+region            = "us-central1"
+cluster_location  = "us-central1-b"
+cluster_name      = "lab-cluster"
 
 github_org  = "your-github-org"
 github_repo = "apt-defense-lab"

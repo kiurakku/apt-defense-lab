@@ -9,16 +9,16 @@ variable "region" {
   default     = "us-central1"
 }
 
+variable "cluster_location" {
+  description = "GKE cluster location (zone or region). Prefer a zonal location for the lab to reduce stockout risk."
+  type        = string
+  default     = "us-central1-b"
+}
+
 variable "cluster_name" {
   description = "GKE cluster name"
   type        = string
   default     = "lab-cluster"
-}
-
-variable "gke_node_locations" {
-  description = "Preferred zones for managed node pools to reduce regional stockout during lab provisioning"
-  type        = list(string)
-  default     = ["us-central1-b"]
 }
 
 variable "github_org" {

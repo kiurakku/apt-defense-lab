@@ -1,4 +1,4 @@
-# Cloud Build — lab pipelines
+# Cloud Build — pipelines for the technical test task
 
 ## Privilege model (Terraform `terraform/cloudbuild.tf`)
 

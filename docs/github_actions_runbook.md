@@ -4,7 +4,7 @@
 
 | Файл | Призначення |
 |------|----------------|
-| `.github/workflows/vulnerable-tf-plan.yml` | PR / lab WIF |
+| `.github/workflows/vulnerable-tf-plan.yml` | PR / WIF для вразливого сценарію (`github-lab-pool`) |
 | `.github/workflows/hardened-tf-plan.yml` | push у `main`, prod WIF |
 | `.github/workflows/hardened-tf-apply.yml` | ручний demo-write у GCS |
 
@@ -55,7 +55,7 @@ gcloud storage cat gs://YOUR_DEMO_BUCKET/demo-write-proof.txt
 
 ---
 
-## 3. Lab / vulnerable path (демонстрація ризику)
+## 3. Вразливий сценарій (PR + WIF) — демонстрація ризику
 
 1. Створіть **окрему гілку**, відкрийте **PR** у той самий репозиторій.
 2. Має запуститися **`vulnerable-tf-plan`** (тригер `pull_request`).
@@ -92,7 +92,7 @@ gcloud storage cat gs://YOUR_DEMO_BUCKET/demo-write-proof.txt
 
 4. Парсер BigQuery — **`cloudbuild/run-trivy-parser.yaml`** (або локально `parse_trivy_bq.py --from-sink`).
 
-Детальніше: `docs/evidence_gcp_runs.md`.
+Детальніше: `docs/google_docs_submission_guide_uk.md` (скріншоти та команди).
 
 ---
 
@@ -103,7 +103,7 @@ gcloud storage cat gs://YOUR_DEMO_BUCKET/demo-write-proof.txt
 - Run **`vulnerable-tf-plan`** на PR.
 - BigQuery dataset / таблиці, Trivy і Falco в кластері (`kubectl get pods`).
 
-Повний список: `docs/evidence_checklist.md`.
+Повний список скрінів: `docs/google_docs_submission_guide_uk.md` (розділ чеклісту).
 
 ---
 

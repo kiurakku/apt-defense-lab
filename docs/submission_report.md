@@ -7,18 +7,18 @@
 
 ## 1. Executive Summary
 
-I built a lab environment **in GCP (GKE Standard only)** to simulate a Russian APT-style intrusion focused on container breakout, control-plane degradation, crypto-mining staging in `/tmp`, and abuse of federated CI credentials. The lab covers four required areas: container escape, API server stress, Trivy-to-BigQuery vulnerability telemetry, and a deliberately vulnerable GitHub Actions Workload Identity Federation path that allows token theft during `terraform plan`. Defensive controls were added with Falco, NetworkPolicy, Workload Identity, Shielded nodes, and a hardened CI path restricted to `main`. **Evidence of actually running Cloud Build jobs and the BigQuery parser in GCP** should be captured separately (see `docs/evidence_gcp_runs.md`); the repository documents architecture and commands, not execution proof by itself.
+This **technical test task** implements a scenario **in GCP (GKE Standard only)** to simulate a Russian APT-style intrusion focused on container breakout, control-plane degradation, crypto-mining staging in `/tmp`, and abuse of federated CI credentials. The solution covers four required areas: container escape, API server stress, Trivy-to-BigQuery vulnerability telemetry, and a deliberately vulnerable GitHub Actions Workload Identity Federation path that allows token theft during `terraform plan`. Defensive controls were added with Falco, NetworkPolicy, Workload Identity, Shielded nodes, and a hardened CI path restricted to `main`. **Evidence of actually running Cloud Build jobs and the BigQuery parser in GCP** should be captured separately (see `docs/evidence_gcp_runs.md` if present, or `docs/google_docs_submission_guide_uk.md`); the repository documents architecture and commands, not execution proof by itself.
 
 ## 2. Infrastructure Overview
 
 - GKE Standard cluster: `lab-cluster`
 - Node pools:
-  - `vulnerable-pool` pinned to an older branch for lab demonstrations
+  - `vulnerable-pool` pinned to an older node image for demonstration in this test task
   - `hardened-pool` with Shielded VM enabled
 - BigQuery dataset: `trivy_logs`
 - Service accounts:
   - `trivy-sa` for GKE Workload Identity
-  - `cicd-lab-sa` / `cicd-plan-sa` / `cicd-apply-sa` for GitHub Actions WIF (lab vs hardened)
+  - `cicd-lab-sa` / `cicd-plan-sa` / `cicd-apply-sa` for GitHub Actions WIF (vulnerable scenario vs hardened)
   - `cloudbuild-deployer` for GCP Cloud Build deployment pipeline
 - Runtime controls:
   - Falco custom rules for `/tmp` staging and suspicious outbound ports
@@ -33,7 +33,7 @@ I built a lab environment **in GCP (GKE Standard only)** to simulate a Russian A
 
 ### 3.1 Container escape
 
-I used the container breakout class tracked by GKE bulletin `GCP-2022-006` for `CVE-2022-0492`. The lab schedules the PoC on workloads targeting **`vulnerable-pool`** (older cgroup/kernel assumptions) to show the risk path from a privileged container toward the host. The proof-of-concept is in `exploits/container_escape/escape.sh`; the expected proof is either host file creation or a clear block caused by newer cgroup/AppArmor defaults, both of which are useful for the report if explained accurately.
+I used the container breakout class tracked by GKE bulletin `GCP-2022-006` for `CVE-2022-0492`. The test setup schedules the PoC on workloads targeting **`vulnerable-pool`** (older cgroup/kernel assumptions) to show the risk path from a privileged container toward the host. The proof-of-concept is in `exploits/container_escape/escape.sh`; the expected proof is either host file creation or a clear block caused by newer cgroup/AppArmor defaults, both of which are useful for the report if explained accurately.
 
 **Command:**
 
@@ -74,7 +74,7 @@ Terraform provisions the GKE cluster, BigQuery dataset/tables, Workload Identity
 
 ### 4.1 Trivy compression format
 
-Trivy Operator uses `gzip` compression and the compressed bytes are then base64-encoded before transport/storage. In this lab that is why the parser performs `base64.b64decode(...)` followed by `gzip.decompress(...)`. This matches the operator setting `scanJob.compressLogs` and the upstream operator behavior described in Aqua documentation and source discussions.
+Trivy Operator uses `gzip` compression and the compressed bytes are then base64-encoded before transport/storage. In this test task implementation that is why the parser performs `base64.b64decode(...)` followed by `gzip.decompress(...)`. This matches the operator setting `scanJob.compressLogs` and the upstream operator behavior described in Aqua documentation and source discussions.
 
 **Screenshot proof:** Trivy operator config showing `scanJob.compressLogs: true`.  
 **Screenshot proof:** one raw BigQuery record containing the compressed blob.
@@ -93,7 +93,7 @@ python scripts/parse_trivy_bq.py --project PROJECT_ID --dataset trivy_logs --fro
 
 ## 5. Task 3: Vulnerable GitHub Action with WIF Token Theft
 
-The vulnerable path is intentionally modeled in `.github/workflows/vulnerable-tf-plan.yml`. It runs on `pull_request`, grants `id-token: write`, and relies on a **lab** WIF provider that validates only the repository name, not the branch reference. In that state an attacker who can open a PR can obtain a Google token for **`cicd-lab-sa`**, read or modify Terraform state (per IAM bound to that SA), and use GCP API permissions that should have been reserved for trusted CI only.
+The vulnerable path is intentionally modeled in `.github/workflows/vulnerable-tf-plan.yml`. It runs on `pull_request`, grants `id-token: write`, and relies on a **vulnerable / demonstration** WIF provider (`github-lab-pool`) that validates only the repository name, not the branch reference. In that state an attacker who can open a PR can obtain a Google token for **`cicd-lab-sa`**, read or modify Terraform state (per IAM bound to that SA), and use GCP API permissions that should have been reserved for trusted CI only.
 
 The exploit narrative and helper payload are under `exploits/github_action_steal/`. The hardened alternative is `.github/workflows/hardened-tf-plan.yml` plus the stricter `attribute_condition` example in `terraform/workload_identity.tf`.
 
@@ -116,4 +116,4 @@ The exploit narrative and helper payload are under `exploits/github_action_steal
 
 ## 7. Final Assessment
 
-The lab demonstrates both offensive and defensive aspects of running GKE securely under realistic cloud constraints. The highest-risk issue is not the container exploit itself but the trust boundary failure in CI, because it can give an attacker cloud credentials without first compromising the cluster. The recommended production posture is to keep runtime controls active, restrict egress, patch GKE promptly, and treat every PR-triggered workflow as untrusted code execution.
+This deliverable demonstrates both offensive and defensive aspects of running GKE securely under realistic cloud constraints. The highest-risk issue is not the container exploit itself but the trust boundary failure in CI, because it can give an attacker cloud credentials without first compromising the cluster. The recommended production posture is to keep runtime controls active, restrict egress, patch GKE promptly, and treat every PR-triggered workflow as untrusted code execution.

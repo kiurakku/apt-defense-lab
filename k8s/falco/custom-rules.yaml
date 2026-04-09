@@ -12,8 +12,7 @@
 - rule: APT Malware TMP File Drop
   desc: Detects file creation in /tmp inside a container — known APT staging tactic
   condition: >
-    spawned_process and container and
-    (open_write) and
+    container and open_write and
     fd.directory = "/tmp" and
     not proc.name in (known_tmp_writers)
   output: >
@@ -37,11 +36,11 @@
   desc: Outbound TCP connection to common reverse shell destination ports from inside a container
   condition: >
     outbound and container and
-    fd.dport in (4444, 4445, 1337, 31337) and
+    fd.rport in (4444, 4445, 1337, 31337) and
     not proc.name in (known_network_tools)
   output: >
     Possible reverse shell C2 connection
     (user=%user.name container=%container.name image=%container.image.repository
-     connection=%fd.name proc=%proc.name dport=%fd.dport cmdline=%proc.cmdline)
+     connection=%fd.name proc=%proc.name cmdline=%proc.cmdline)
   priority: CRITICAL
   tags: [apt, reverse-shell, c2, container]

@@ -11,7 +11,7 @@ locals {
   cloudbuild_project_roles = [
     "roles/cloudbuild.builds.builder",
     "roles/artifactregistry.writer",
-    "roles/container.developer",
+    "roles/container.admin",
     "roles/logging.logWriter",
     # run-trivy-parser.yaml / parse_trivy_bq.py (sink or raw tables)
     "roles/bigquery.jobUser",
@@ -33,4 +33,10 @@ resource "google_bigquery_dataset_iam_member" "cloudbuild_bq_data_editor" {
   member     = "serviceAccount:${google_service_account.cloudbuild.email}"
 
   depends_on = [google_bigquery_dataset.trivy_logs]
+}
+
+resource "google_storage_bucket_iam_member" "cloudbuild_source_bucket_object_admin" {
+  bucket = "${var.project_id}_cloudbuild"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloudbuild.email}"
 }
