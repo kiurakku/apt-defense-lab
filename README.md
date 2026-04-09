@@ -186,3 +186,6 @@ Workflows set `TF_VAR_github_org` / `TF_VAR_github_repo` from the GitHub reposit
 - **`docs/README.md`** — індекс усієї документації
 - **`docs/google_docs_submission_guide_uk.md`** — структура звіту в Google Docs, **усі скріншоти** та як їх отримати (українською)
 - `docs/submission_report.md` — чернетка тексту звіту (EN)
+
+PR demo 2026-04-09T14:42:06.0390015+03:00
+
