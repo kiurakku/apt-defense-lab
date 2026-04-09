@@ -131,16 +131,24 @@ resource "google_project_iam_member" "cicd_lab_viewer" {
 }
 
 # Terraform plan/refresh reads bucket IAM policies for `google_storage_bucket_iam_member`.
-# Grant read-only Storage viewer at the project to avoid failing on storage.buckets.getIamPolicy.
-resource "google_project_iam_member" "cicd_plan_storage_viewer" {
+# Predefined Storage roles are often insufficient for `storage.buckets.getIamPolicy`, so we grant a tiny custom role.
+resource "google_project_iam_custom_role" "tf_gcs_iam_policy_reader" {
+  project     = var.project_id
+  role_id     = "tfGcsIamPolicyReader"
+  title       = "Terraform: read GCS bucket IAM policy"
+  description = "Minimal permission so CI terraform plan can refresh bucket IAM bindings"
+  permissions = ["storage.buckets.getIamPolicy"]
+}
+
+resource "google_project_iam_member" "cicd_plan_gcs_iam_policy_reader" {
   project = var.project_id
-  role    = "roles/storage.viewer"
+  role    = google_project_iam_custom_role.tf_gcs_iam_policy_reader.name
   member  = "serviceAccount:${google_service_account.cicd_plan.email}"
 }
 
-resource "google_project_iam_member" "cicd_lab_storage_viewer" {
+resource "google_project_iam_member" "cicd_lab_gcs_iam_policy_reader" {
   project = var.project_id
-  role    = "roles/storage.viewer"
+  role    = google_project_iam_custom_role.tf_gcs_iam_policy_reader.name
   member  = "serviceAccount:${google_service_account.cicd_lab.email}"
 }
 
