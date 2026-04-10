@@ -5,6 +5,10 @@ substitutions:
   _REPO: lab-ci
   _IMAGE: ci-deploy
 
+# Push uses Terraform SA (roles/artifactregistry.writer). Apply cloudbuild.tf so default
+# [PROJECT_NUMBER]@cloudbuild.gserviceaccount.com has roles/iam.serviceAccountUser on this SA.
+serviceAccount: projects/$PROJECT_ID/serviceAccounts/cloudbuild-deployer@$PROJECT_ID.iam.gserviceaccount.com
+
 steps:
   - name: gcr.io/cloud-builders/docker
     args:

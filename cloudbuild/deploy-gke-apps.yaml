@@ -5,8 +5,9 @@
 #   gcloud builds submit --config=cloudbuild/cloudbuild.yaml .
 # Default _IMAGE_TAG=latest is pushed by cloudbuild.yaml alongside SHORT_SHA.
 #
-# Trigger: set service account to terraform output cloudbuild_sa_email (or cloudbuild_sa_resource_name per GCP docs).
 # Substitutions: _TRIVY_GSA_EMAIL (terraform output trivy_sa_email), _REGION, _CLUSTER_LOCATION, _CLUSTER_NAME.
+
+serviceAccount: projects/$PROJECT_ID/serviceAccounts/cloudbuild-deployer@$PROJECT_ID.iam.gserviceaccount.com
 
 options:
   logging: CLOUD_LOGGING_ONLY

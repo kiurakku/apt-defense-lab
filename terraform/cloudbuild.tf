@@ -1,9 +1,20 @@
+data "google_project" "lab" {
+  project_id = var.project_id
+}
+
 resource "google_service_account" "cloudbuild" {
   account_id   = var.cloudbuild_sa_name
   display_name = "Cloud Build deploy pipeline"
   project      = var.project_id
 
   depends_on = [google_project_service.lab]
+}
+
+# Default Cloud Build SA must impersonate this SA when builds set serviceAccount in cloudbuild.yaml.
+resource "google_service_account_iam_member" "cloudbuild_default_act_as_deployer" {
+  service_account_id = google_service_account.cloudbuild.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${data.google_project.lab.number}@cloudbuild.gserviceaccount.com"
 }
 
 # Minimal roles for building + pushing + deploying to GKE (tighten further per org policy).
