@@ -9,7 +9,7 @@
 | Автор | (вкажіть ім’я) |
 | Дата | 10.04.2026 |
 | GCP Project ID | devsecopstests |
-| Репозиторій | https://github.com/kiurakku/apt-defense-lab |
+| Репозиторій | (посилання на ваш fork або основний репозиторій на GitHub) |
 | Посилання на Google Doc | (вставте посилання з доступом «Anyone with the link») |
 
 ---

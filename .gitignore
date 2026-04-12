@@ -12,3 +12,6 @@ __pycache__/
 
 # Згенерований звіт Word (джерело — Google_Doc_Report *.md)
 docs/*.docx
+
+# Чернетки / копії для вставки в Google Docs (не версіонувати)
+temp-Report*
