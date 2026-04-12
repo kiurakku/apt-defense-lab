@@ -11,15 +11,18 @@ func main() {
 	fmt.Println("[DEMO] stage=init uid=", uid, "inContainer=", inContainer, "cgroupVersion=", cgroupV)
 
 	// Simulated branch: escape path only meaningful on cgroup v1 + privileged context.
+	releaseAgentWritable := false
 	if cgroupV >= 2 {
-		releaseAgentWritable := false
-		fmt.Println("[DEMO] stage=check releaseAgentWritable=", releaseAgentWritable)
+		prev := releaseAgentWritable
+		releaseAgentWritable = false
+		fmt.Printf("[TRACE] releaseAgentWritable: %v -> %v (cgroup v2: no legacy release_agent path)\n", prev, releaseAgentWritable)
 		fmt.Println("[DEMO] outcome=abort reason=cgroup_v2_mitigation")
 		return
 	}
 
-	releaseAgentWritable := true
-	fmt.Println("[DEMO] stage=check releaseAgentWritable=", releaseAgentWritable)
+	prev := releaseAgentWritable
+	releaseAgentWritable = true
+	fmt.Printf("[TRACE] releaseAgentWritable: %v -> %v (cgroup v1 path)\n", prev, releaseAgentWritable)
 	proofPath := "/tmp/escape_proof.txt"
 	fmt.Println("[DEMO] stage=would_invoke_host_payload path=", proofPath)
 }

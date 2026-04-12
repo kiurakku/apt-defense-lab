@@ -1,0 +1,153 @@
+Звіт: apt-defense-lab (технічне тестове завдання)
+
+Автор: Cloud9's
+Дата: 10.04.2026
+GCP Project ID: devsecopstests
+Репозиторій: github.com/kiurakku/apt-defense-lab
+
+---
+
+1. Executive Summary
+Побудовано ізольоване технічне тестове середовище в GCP (лише GKE Standard) для демонстрації сценарію на кшталт APT: вихід за межі контейнера, деградація доступу до API сервера кластера, підготовка активності в /tmp, зворотні з’єднання на типові порти C2, а також зловживання Workload Identity Federation (WIF) у GitHub Actions.
+
+Охоплені області:
+• Container escape — PoC для класу CVE-2022-0492 (узгоджено з бюлетенями GKE).
+• Control-plane stress — масове створення об’єктів API для демонстрації деградації kubectl / планувальника.
+• Trivy → BigQuery — оператор Trivy, стислі логи, Log Router sink у BigQuery, парсер у таблицю clean_vulnerabilities.
+• Вразливий CI — terraform plan на PR з WIF до cicd-lab-sa; поряд захищений шлях (main → cicd-plan-sa, контрольований apply → cicd-apply-sa та demo bucket).
+
+Захист: Falco (кастомні правила), NetworkPolicy (default-deny egress + allowlist), WIF замість JSON-ключів, Shielded nodes на hardened-pool.
+
+---
+
+2. Infrastructure Overview
+Кластер: lab-cluster (GKE Standard).
+• vulnerable-pool — старіший образ вузла для демонстрації ризиків.
+• hardened-pool — Shielded VM, актуальніший базовий образ.
+BigQuery: dataset trivy_logs (sink від Cloud Logging, таблиці clean_vulnerabilities, raw_compressed_logs).
+
+2.1 Скріншоти інфраструктури
+[S-GKE-1] — Кластер lab-cluster, видно обидва пули vulnerable-pool та hardened-pool. Підпис: конфігурація з розділеними пулами для демо та захисту.
+
+[S-BQ-1] — Dataset trivy_logs, список таблиць. Підпис: сховище для експорту логів і нормалізованих вразливостей.
+
+---
+
+3. Task 1. Container Escape & Control-plane Stress
+
+3.1 Container escape (CVE-2022-0492)
+PoC: exploits/container_escape/escape.sh. Експлуатація орієнтована на поди на vulnerable-pool. На сучасному GKE часто cgroup v2 — класичний release_agent шлях не спрацьовує; це очікуваний результат демонстрації.
+
+[S-ESC-1] — Вивід скрипта в терміналі (успіх або повідомлення про блок).
+
+3.2 Control-plane stress
+Скрипт: exploits/master_plane_crash/dos_apiserver.sh. Параметр COUNT регулює інтенсивність.
+
+[S-DOS-1] — Фрагмент виконання циклу створення ConfigMap.
+[S-DOS-2] — Порівняння time kubectl get nodes до/після.
+
+3.3 Аналіз механіки та «трасування» (узгодження з рецензією)
+
+Важливо по термінології CVE-2022-0492: акцент не на «багу Kubelet як такого», а на тому, що в певному контексті середовища (привілейований контейнер, доступ до ієрархії cgroup v1, notify_on_release / release_agent у ядрі Linux) можлива ескалація через механізм ядра. На cgroup v2 багато класичних прийомів блокуються — це відображено в PoC.
+
+У межах цього репозиторію не виконувалась перекомпіляція kubernetes/kubernetes і не додавались рядки klog у файли рантайму (kuberuntime_container.go тощо). Для звіту доказом «точки спостереження» слугують:
+• анотовані bash-скрипти з мітками [DEMO] у exploits/container_escape/escape.sh та dos_apiserver.sh;
+• освітній стаб demos/cgroup_escape_trace_stub.go (Go), який показує гілкування логіки та зміну змінних без підключення dlv до реального kube-apiserver.
+
+[S-K8S-CODE] (альтернатива рецензії «VS Code з kuberuntime»): скрін редактора з відкритим файлом репозиторію — наприклад scripts/parse_trivy_bq.py (функція decode_blob) АБО фрагмент escape.sh з рядками [DEMO]. Підпис одним реченням: «У межах лабораторії модифікація upstream Kubernetes не виконувалась; наведено код сценаріїв репозиторію.»
+
+[S-K8S-TRACE] — Термінал після команди: go run demos/cgroup_escape_trace_stub.go
+Очікуваний фрагмент виводу (для підпису до скріну): рядки [TRACE] зі зміною releaseAgentWritable (false -> false на cgroup v2) та [DEMO] outcome=abort reason=cgroup_v2_mitigation.
+
+---
+
+4. Task 2. Terraform, Cloud Build, Trivy, BigQuery
+
+4.1 Cloud Build
+[S-CB-1] — Успішна збірка образу ci-deploy (cloudbuild.yaml).
+[S-CB-2] — Деплой GKE Apps (Helm Trivy/Falco, Network Policies).
+
+4.2 Trivy: компресія та BigQuery
+У потоку логів Trivy одночасно є читабельні рядки stderr (INFO, завантаження DB) і окремі записи з довгим base64 — це вже пакований звіт (типово JSON → gzip → base64 у шляху оператора). Основний формат для звітів Trivy Operator — gzip; теоретично інші шляхи можуть давати інші кодування — тому парсер підтримує кілька декодерів (див. код нижче).
+
+Формат: scanJob.compressLogs: true; транспорт у BigQuery через Log Router sink.
+
+Речення для узгодження з рецензією: «Парсер не прив’язаний лише до одного магічного префіксу: після base64-декодування послідовно пробуються розпакування gzip, bzip2 та zlib, потім JSON — це покриває варіації продюсера без жорсткої прив’язки лише до \x1f\x8b (gzip).»
+
+[S-TRIVY-1] — kubectl get cm trivy-operator-config -n trivy-system -o yaml — scanJob.compressLogs: "true"
+
+[S-BQ-3] — ОНОВИТИ: новий скрін після python scripts/bq_sink_inspect.py --project devsecopstests --dataset trivy_logs — у полі textPayload має бути видно ДОВГИЙ рядок base64 (не рядок про Downloading DB). Якщо таких рядків ще немає — запустити скан/дічекатися звітів або перевірити stdout_* таблицю.
+
+4.3 Парсер (scripts/parse_trivy_bq.py)
+Скрипт відфільтровує шумові INFO-рядки і декодує кандидатів base64.
+
+[S-BQ-2] — Preview таблиці clean_vulnerabilities.
+
+4.4 Фрагмент коду парсера (вставити моноширинним, бажано сірий фон у Word)
+
+Нижче — актуальна функція з репозиторію (файл scripts/parse_trivy_bq.py):
+
+def decode_blob(raw: str) -> dict[str, Any]:
+    """Decode Trivy payload: plain JSON, or base64 then gzip / bzip2 / zlib then JSON."""
+    cleaned = re.sub(r"\s+", "", raw)
+    if not cleaned:
+        raise ValueError("empty payload")
+    if cleaned.startswith("{"):
+        return json.loads(cleaned)
+    missing_padding = len(cleaned) % 4
+    if missing_padding:
+        cleaned += "=" * (4 - missing_padding)
+    compressed = base64.b64decode(cleaned, validate=True)
+    decoders = (
+        lambda blob: blob.decode("utf-8"),
+        lambda blob: gzip.decompress(blob).decode("utf-8"),
+        lambda blob: bz2.decompress(blob).decode("utf-8"),
+        lambda blob: zlib.decompress(blob).decode("utf-8"),
+    )
+    for decoder in decoders:
+        try:
+            return json.loads(decoder(compressed))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, zlib.error):
+            continue
+    raise ValueError("unsupported compressed payload")
+
+(У повному файлі також є run_from_sink з відбором рядків із довгим base64 — цитувати за потреби другим блоком.)
+
+---
+
+5. Task 3. GitHub Actions і WIF
+Вразливий: PR → WIF pool lab → cicd-lab-sa.
+Захищений: push main → pool prod → cicd-plan-sa.
+Impact: cicd-apply-sa → demo-write-proof.txt у demo bucket.
+
+[S-GH-1] — vulnerable-tf-plan на Pull Request.
+[S-GH-2] — hardened-tf-plan після push у main (додати, якщо був пропуск).
+[S-GH-3] — hardened-tf-apply (workflow_dispatch).
+[S-DEMO-1] — об’єкт у GCS / gsutil ls.
+
+---
+
+6. Захисні засоби: Falco та NetworkPolicy
+Falco: запис у /tmp, C2-порти (кастомні правила в k8s/falco/values.yaml).
+
+[S-FALCO-1] — Лог Falco саме зі спрацюванням правила з репозиторію (наприклад «Suspicious write to /tmp» / «APT magic file staging» / reverse shell), після kubectl run … на vulnerable-pool. Не плутати з загальним рядком Falco без вашого тригера.
+
+[S-NP-1] — kubectl get networkpolicy -A.
+
+---
+
+7. Висновок
+Найвищий системний ризик — недостатньо суворі умови WIF для Pull Requests. Falco, NetworkPolicy, оновлення GKE та attribute_condition (repo, ref, workflow) критичні для продакшену.
+
+Cost optimization (додаткова теза): стиснення звітів Trivy (gzip→base64) і відбір лише релевантних рядків у парсері зменшують обсяг даних у BigQuery та витрати на зберігання й запити порівняно зі збереженням сирих необмежених логів — це інженерна ефективність поряд із безпекою.
+
+---
+
+Додаток. Чекліст перед здачею (з уточненнями рецензента)
+☐ S-BQ-3 оновлено (довгий base64 у textPayload)
+☐ S-FALCO-1 — саме ваш тригер правила
+☐ S-K8S-TRACE — go run demos/cgroup_escape_trace_stub.go з рядками [TRACE]
+☐ S-K8S-CODE — скрін коду з РЕПО (parse_trivy_bq або escape.sh), не обов’язково патч Kubernetes
+☐ У Word: код — Courier/Consolas, фон сірий для читабельності
+
+Кінець тимчасового звіту (скопіюйте в Report02 / Google Doc і відформатуйте заголовки).
