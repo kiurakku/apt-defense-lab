@@ -1,5 +1,7 @@
 Звіт: apt-defense-lab (технічне тестове завдання)
 
+Актуальна повна версія для Google Docs / Word: docs/Google_Doc_Report_apt-defense-lab_UK.md та docs/Report02-apt-defense-lab.docx (зібрати: python scripts/build_report_docx.py).
+
 Після вставки в Google Docs: виділи рядки розділів (1–7, Додаток) і застосуй «Заголовок 1» або «Заголовок 2»; таблиці за бажанням збери через «Вставка → Таблиця» за зразком нижче або залиш списками.
 
 

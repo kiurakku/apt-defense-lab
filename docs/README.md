@@ -13,6 +13,7 @@
 | [**github_actions_runbook.md**](github_actions_runbook.md) | Push, PR, hardened plan/apply, секрети, drift GKE |
 | [**logging_pipeline.md**](logging_pipeline.md) | Sink → BigQuery, парсер `--from-sink`, E2E |
 | [**google_docs_submission_guide_uk.md**](google_docs_submission_guide_uk.md) | **Звіт у Google Docs:** структура, усі скріншоти, як їх зняти |
+| [**Google_Doc_Report_apt-defense-lab_UK.md**](Google_Doc_Report_apt-defense-lab_UK.md) | **Повний текст звіту (UK)** для імпорту в Google Docs; з нього збирається [**Report02-apt-defense-lab.docx**](Report02-apt-defense-lab.docx) (`python scripts/build_report_docx.py`) |
 | [**submission_report.md**](submission_report.md) | Чернетка тексту звіту (EN) |
 | [**report_template.md**](report_template.md) | Шаблон розділів звіту |
 
