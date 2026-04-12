@@ -9,3 +9,6 @@ scripts/.venv/
 .venv/
 __pycache__/
 *.pyc
+
+# Згенерований звіт Word (джерело — Google_Doc_Report *.md)
+docs/*.docx

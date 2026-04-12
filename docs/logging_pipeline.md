@@ -24,7 +24,7 @@ bq show --format=prettyjson PROJECT_ID:DATASET_ID.TABLE_ID
 
 ## Чому в Preview часто видно plain `textPayload`
 
-Потік **stderr** Trivy містить багато **читабельних** рядків (завантаження DB тощо). **Gzip+base64** звіту про CVE з’являється в **інших** рядках — шукайте довгі послідовності `[A-Za-z0-9+/]{96+,}` у `textPayload` або використовуйте `scripts/bq_sink_inspect.py` (автовибір такого рядка). Детальніше: **`docs/reviewer_addendum_bq_and_exploits_uk.md`**.
+Потік **stderr** Trivy містить багато **читабельних** рядків (завантаження DB тощо). **Gzip+base64** звіту про CVE з’являється в **інших** рядках — шукайте довгі послідовності `[A-Za-z0-9+/]{96+,}` у `textPayload` або використовуйте `scripts/bq_sink_inspect.py` (автовибір такого рядка). Пояснення для звіту: **`docs/Google_Doc_Report_apt-defense-lab_UK.md`**, розділ 4.2 та Додаток B.
 
 ## Доказ E2E
 

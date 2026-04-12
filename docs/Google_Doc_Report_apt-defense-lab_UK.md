@@ -29,7 +29,7 @@
 
 **Стек з ТЗ:** повний ELK не розгортався; телеметрія — **Cloud Logging → BigQuery** та Falco.
 
-**Докази:** скріншоти за розділами нижче; чекліст — `docs/google_docs_submission_guide_uk.md`.
+**Докази:** скріншоти за розділами нижче; детальні інструкції по кожному ID — `docs/google_docs_submission_guide_uk.md`.
 
 ---
 
@@ -51,7 +51,7 @@
 
 ## 3. Task 1. Container escape та навантаження на API
 
-Окремий локальний minikube/kind у ТЗ не обов’язковий; «старіша» конфігурація — **окремий node pool** на GKE. Для демонстрації механіки можна додатково використати kind/minikube (див. `docs/exploits_mechanics_uk.md`).
+Окремий локальний minikube/kind у ТЗ не обов’язковий; «старіша» конфігурація — **окремий node pool** на GKE. Для демонстрації механіки PoC локально можна використати **kind/minikube** (ізольоване середовище).
 
 ### 3.1 Container escape (CVE-2022-0492)
 
@@ -112,9 +112,7 @@ python scripts/parse_trivy_bq.py --project devsecopstests --dataset trivy_logs -
 
 ### 4.4 Відповідь рецензенту: експлойти та «відладчик Kubernetes»
 
-**BigQuery / компресія:** детально — у файлі репозиторію `docs/reviewer_addendum_bq_and_exploits_uk.md` (той самий зміст можна вставити сюди дослівно).
-
-**Експлойти:** у скриптах додано вивід **`[DEMO]`** по етапах; пояснення класів вразливостей і мітигації — **`docs/exploits_mechanics_uk.md`**. Опційна міні-програма **`demos/cgroup_escape_trace_stub.go`** ілюструє зміну змінних без форку `kubernetes/kubernetes`.
+**BigQuery / компресія та експлойти:** див. **Додаток B** нижче (повний текст відповіді рецензента). У скриптах експлойтів — вивід **`[DEMO]`**; опційно **`demos/cgroup_escape_trace_stub.go`**.
 
 **Що свідомо не входить у обсяг лабораторії:** повна перекомпіляція вихідного коду Kubernetes з підключенням **dlv** до `kube-apiserver` — окремий великий проєкт; у звіті достатньо посилань на бюлетені GKE, анотовані скрипти та цей абзац.
 
@@ -175,7 +173,7 @@ python scripts/parse_trivy_bq.py --project devsecopstests --dataset trivy_logs -
 
 ## Додаток B. Текст відповіді рецензенту (BigQuery + експлойти)
 
-*(Нижче — повний текст з `docs/reviewer_addendum_bq_and_exploits_uk.md`; залишено для зручності копіювання в Google Doc.)*
+*(Нижче — текст відповіді рецензента для копіювання в Google Doc.)*
 
 ### B.1 Чому в BigQuery у textPayload видно «незжатий» текст
 
@@ -196,7 +194,7 @@ python scripts/parse_trivy_bq.py --project PROJECT_ID --dataset trivy_logs --fro
 
 ### B.2 Експлойти, локальний K8s, відладчик
 
-У `escape.sh` та `dos_apiserver.sh` додано етапи **`[DEMO]`**. Документ **`docs/exploits_mechanics_uk.md`**. Опційно **`demos/cgroup_escape_trace_stub.go`**.
+У `escape.sh` та `dos_apiserver.sh` додано етапи **`[DEMO]`**; опційно **`demos/cgroup_escape_trace_stub.go`**.
 
 **Не входить у обсяг типового ТЗ без окремого завдання:** форк **kubernetes/kubernetes**, `klog` у ядрі оркестратора, **dlv** на реальному `kube-apiserver`.
 
@@ -204,4 +202,4 @@ python scripts/parse_trivy_bq.py --project PROJECT_ID --dataset trivy_logs --fro
 
 ---
 
-*Кінець документа. Актуальна версія в репозиторії: `docs/Google_Doc_Report_apt-defense-lab_UK.md`.*
+*Кінець документа.*

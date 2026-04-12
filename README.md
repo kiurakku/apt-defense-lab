@@ -181,8 +181,8 @@ Workflows set `TF_VAR_github_org` / `TF_VAR_github_repo` from the GitHub reposit
 - https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
 - https://aquasecurity.github.io/trivy-operator/v0.25.0/getting-started/installation/configuration/
 
-## Report
+## Звіт
 
-- **`docs/README.md`** — індекс усієї документації
-- **`docs/google_docs_submission_guide_uk.md`** — структура звіту в Google Docs, **усі скріншоти** та як їх отримати (українською)
-- `docs/submission_report.md` — чернетка тексту звіту (EN)
+- **`docs/Google_Doc_Report_apt-defense-lab_UK.md`** — повний текст звіту (UK)
+- **`docs/google_docs_submission_guide_uk.md`** — чекліст скріншотів (S-*) і як їх зняти
+- `python scripts/build_report_docx.py` — зібрати Word локально (`docs/*.docx` у `.gitignore`)

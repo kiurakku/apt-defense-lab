@@ -1,6 +1,6 @@
 # Гайд: як зібрати звіт у Google Docs (текст + скріншоти)
 
-Цей документ описує **як має виглядати звіт з технічного тестового завдання** (репозиторій **apt-defense-lab**): **де** вставляти скріншоти, **які** саме, і **як їх отримати**. Базовий текст розділів — у **`docs/submission_report.md`** (англійською); нижче — українська інструкція для переносу в Google Docs.
+Цей документ описує **як має виглядати звіт з технічного тестового завдання** (репозиторій **apt-defense-lab**): **де** вставляти скріншоти, **які** саме, і **як їх отримати**. Повний текст звіту українською — **`docs/Google_Doc_Report_apt-defense-lab_UK.md`** (імпорт у Google Docs або збірка Word: `python scripts/build_report_docx.py`).
 
 ---
 
@@ -11,7 +11,7 @@
 | № | Розділ | Джерело тексту |
 |---|--------|----------------|
 | 0 | Титул: автор, дата, GCP project, посилання на репозиторій | Вручну |
-| 1 | Executive Summary (коротко: що зроблено, 4 теми, захист) | `submission_report.md` §1 |
+| 1 | Executive Summary (коротко: що зроблено, 4 теми, захист) | `Google_Doc_Report_apt-defense-lab_UK.md` §1 |
 | 2 | Infrastructure Overview | §2 |
 | 3 | Task 1 — escape + stress на GKE | §3 |
 | 4 | Task 2 — Terraform, Cloud Build, Trivy → BigQuery | §4 |
@@ -36,7 +36,7 @@
 
 ### Що вставити текстом
 
-Перепис або копія з **`submission_report.md` §2** (кластер, пули, dataset, SA, Falco/NP).
+Перепис або копія з **`Google_Doc_Report_apt-defense-lab_UK.md` §2** (кластер, пули, dataset, SA, Falco/NP).
 
 ### Скріншоти
 
@@ -69,7 +69,7 @@
 
 ### Текст
 
-`submission_report.md` §4, §4.1, §4.2.
+`Google_Doc_Report_apt-defense-lab_UK.md` §4.
 
 ### Скріншоти та артефакти
 
@@ -88,7 +88,7 @@
 
 ### Текст
 
-`submission_report.md` §5.
+`Google_Doc_Report_apt-defense-lab_UK.md` §5.
 
 ### Скріншоти
 
@@ -115,7 +115,7 @@
 
 ## Розділ 7 — Final Assessment
 
-Текст з **`submission_report.md` §7**; скріншоти не обов’язкові.
+Текст з **`Google_Doc_Report_apt-defense-lab_UK.md` §7**; скріншоти не обов’язкові.
 
 ---
 
@@ -133,7 +133,7 @@
 ## Як перенести в Google Docs
 
 1. Створи документ, застосуй **Заголовок 1 / 2 / 3** як у структурі вище.  
-2. Скопіюй текст з **`docs/submission_report.md`** (або переклади українською — як вимагає курс).  
+2. Скопіюй текст з **`docs/Google_Doc_Report_apt-defense-lab_UK.md`** або імпортуй файл у Google Docs.  
 3. Вставляй **Вставка → Зображення → Завантажити з комп’ютера** для кожного скріну під відповідним підрозділом; у **Додати опис** можна вказати ID (наприклад `S-CB-1`).  
 4. Для команд використовуй **моноширинний** шрифт (Format → Text → Courier New або Consolas).  
 5. Експорт: **Файл → Завантажити → PDF** (якщо здача у PDF).
@@ -144,7 +144,7 @@
 
 | Файл | Призначення |
 |------|-------------|
-| `docs/submission_report.md` | Чернетка тексту звіту (EN) |
+| `docs/Google_Doc_Report_apt-defense-lab_UK.md` | Повний текст звіту (UK) |
 | `docs/github_actions_runbook.md` | Порядок GitHub/GCP, секрети, drift GKE |
 | `docs/architecture_and_stack.md` | Детальніша архітектура |
 | `docs/logging_pipeline.md` | Логи → BigQuery → парсер |
