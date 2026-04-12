@@ -100,18 +100,20 @@ S-CB-3 (опційно) — що на скріні: успішний run-trivy-p
 
 Формат: gzip, далі base64 у транспорті/логах; у парсері — розпаковка після декодування. У конфігурації оператора: scanJob.compressLogs: true.
 
+Чому в BigQuery у випадковому рядку видно «незжатий» текст: у потік stderr потрапляють звичайні рядки логера (INFO, завантаження Trivy DB). Вони не gzip — це очікувано. Звіт CVE передається окремими записами, де textPayload містить довгий base64-блок; інспектор bq_sink_inspect.py тепер намагається обрати саме такий рядок для скріну [S-BQ-3]. Детальний текст для рецензента: docs/reviewer_addendum_bq_and_exploits_uk.md.
+
 S-TRIVY-1 — що на скріні: фрагмент YAML з compressLogs: true.
 Де взяти: kubectl get cm trivy-operator-config -n trivy-system -o yaml.
 
-S-BQ-3 (опційно) — що на скріні: один рядок sink-таблиці або вивід інспектора схеми/зразка.
-Де взяти: python scripts/bq_sink_inspect.py --project devsecopstests --dataset trivy_logs або BigQuery → таблиця stdout_YYYYMMDD / stderr_YYYYMMDD → Preview одного рядка (без зайвих секретів).
+S-BQ-3 (опційно) — що на скріні: один рядок sink-таблиці з довгим base64-подібним textPayload або вивід інспектора.
+Де взяти: python scripts/bq_sink_inspect.py --project devsecopstests --dataset trivy_logs (за потреби --table stderr_YYYYMMDD) або BigQuery → Preview після фільтрації довгих рядків.
 
 Підпис (приклад): Підтвердження стиснення логів сканування та наявність сирих записів у експорті Logging → BigQuery.
 
 
 4.3 Парсер BigQuery (scripts/parse_trivy_bq.py)
 
-Скрипт читає рядки експорту Cloud Logging (прапорець --from-sink), витягує вразливості й записує у clean_vulnerabilities.
+Скрипт читає рядки експорту Cloud Logging (прапорець --from-sink), знаходить кандидати base64(gzip(JSON)) без зшивання шумових INFO-рядків, витягує вразливості й записує у clean_vulnerabilities. Фрагменти коду для звіту: функції decode_blob та run_from_sink у scripts/parse_trivy_bq.py.
 
 Команда для прикладу у звіті (одним рядком у моноширинному шрифті в Docs):
 
@@ -123,6 +125,11 @@ S-BQ-2 — що на скріні: Preview таблиці clean_vulnerabilities 
 Де взяти: BigQuery → trivy_logs → clean_vulnerabilities → Preview.
 
 Підпис (приклад): Нормалізовані записи вразливостей після парсингу логів sink.
+
+
+4.4 Уточнення рецензента (експлойти, локальний K8s, код парсера)
+
+Повний текст відповіді: docs/reviewer_addendum_bq_and_exploits_uk.md. Коротко: (1) у BigQuery stderr часто видно plain INFO — стиснений звіт у окремих рядках з довгим base64; парсер і bq_sink_inspect.py оновлено під це; (2) механіка escape/stress — docs/exploits_mechanics_uk.md, у скриптах експлойтів додано мітки [DEMO]; опційно demos/cgroup_escape_trace_stub.go замість відладки вихідного коду Kubernetes.
 
 
 5. Task 3. GitHub Actions і Workload Identity Federation

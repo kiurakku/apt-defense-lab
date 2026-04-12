@@ -28,7 +28,6 @@ import logging
 import re
 import sys
 import zlib
-from collections import OrderedDict
 from datetime import date, datetime, time, timezone
 from hashlib import sha256
 from typing import Any, Iterator
@@ -40,6 +39,9 @@ LOGGER = logging.getLogger("parse_trivy_bq")
 # Tables managed by this repo (not Logging sink exports)
 _EXCLUDE_SINK_SCAN = frozenset({"raw_compressed_logs", "clean_vulnerabilities"})
 _B64ISH = re.compile(r"^[A-Za-z0-9+/=\s]+$")
+# Report blobs in logs are long base64(gzip(JSON)); plain stderr lines are human-readable (INFO/Downloading…).
+_MIN_B64_RUN = 96
+_B64_RUN_RE = re.compile(r"[A-Za-z0-9+/]{%d,}={0,2}" % _MIN_B64_RUN)
 
 
 def decode_blob(raw: str) -> dict[str, Any]:
@@ -106,17 +108,39 @@ def _ts_for_bq(ts: Any) -> str:
     return str(ts)
 
 
-def _walk_strings(obj: Any, out: list[str]) -> None:
-    if isinstance(obj, str):
-        s = obj.strip()
-        if len(s) >= 16 and _B64ISH.match(s):
-            out.append(s.replace("\n", "").replace(" ", ""))
-    elif isinstance(obj, dict):
-        for v in obj.values():
-            _walk_strings(v, out)
-    elif isinstance(obj, list):
-        for v in obj:
-            _walk_strings(v, out)
+def _looks_like_plain_trivy_status_log(line: str) -> bool:
+    """True for typical Trivy CLI stderr (not gzip+b64 vulnerability report)."""
+    s = line.strip()
+    if len(s) < 32:
+        return False
+    if re.match(r"^\d{4}-\d{2}-\d{2}T", s) and re.search(r"\t(INFO|WARN|ERROR|DEBUG)\t", s):
+        return True
+    if "[vulndb]" in s or "Downloading artifact" in s or "Trivy DB" in s:
+        return True
+    return False
+
+
+def _extract_encoded_candidates(text: str) -> list[str]:
+    """Split textPayload into pieces that might decode as base64 → gzip → JSON report."""
+    if not text:
+        return []
+    cleaned = text.strip()
+    out: list[str] = []
+    compact = re.sub(r"\s+", "", cleaned)
+    if len(compact) >= _MIN_B64_RUN and _B64ISH.match(compact):
+        out.append(compact)
+    for m in _B64_RUN_RE.finditer(cleaned):
+        chunk = m.group(0)
+        if len(chunk) >= _MIN_B64_RUN:
+            out.append(chunk)
+    # Deduplicate preserving order
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for c in out:
+        if c not in seen:
+            seen.add(c)
+            uniq.append(c)
+    return uniq
 
 
 def _row_to_nested_dict(row: Any) -> dict[str, Any]:
@@ -158,6 +182,44 @@ def _find_sink_table(client: bigquery.Client, project: str, dataset: str) -> tup
         )
     candidates.sort(key=lambda x: -x[1])
     return candidates[0]
+
+
+def _count_encoded_like_rows(client: bigquery.Client, fq: str) -> int:
+    """Rows whose textPayload contains a long base64-like span (Trivy report transport)."""
+    q = f"""
+    SELECT COUNT(1) AS c FROM `{fq}`
+    WHERE textPayload IS NOT NULL
+      AND REGEXP_CONTAINS(textPayload, r'[A-Za-z0-9+/]{{{_MIN_B64_RUN},}}')
+    """
+    try:
+        return int(next(client.query(q).result())["c"])
+    except Exception as exc:
+        LOGGER.debug("Encoded count failed for %s: %s", fq, exc)
+        return 0
+
+
+def _pick_sink_table_for_reports(client: bigquery.Client, project: str, dataset: str) -> tuple[str, int]:
+    """Prefer sink partition (stdout/stderr) that actually has gzip+b64 report lines, not only INFO logs."""
+    ds = f"{project}.{dataset}"
+    best: tuple[str, int] | None = None
+    for t in client.list_tables(ds):
+        if t.table_id in _EXCLUDE_SINK_SCAN:
+            continue
+        fq = f"{project}.{dataset}.{t.table_id}"
+        n = _count_encoded_like_rows(client, fq)
+        if n > 0 and (best is None or n > best[1]):
+            best = (t.table_id, n)
+    if best:
+        LOGGER.info("Chose sink table %s (%s rows with long base64-like spans)", best[0], best[1])
+        return best
+    tid, total = _find_sink_table(client, project, dataset)
+    LOGGER.warning(
+        "No rows matched base64 heuristic yet; using largest table %s (~%s rows). "
+        "Run scans and wait for vulnerability report logs, or check stdout_* tables.",
+        tid,
+        total,
+    )
+    return tid, total
 
 
 def _group_key_from_sink_row(d: dict[str, Any]) -> str:
@@ -217,82 +279,101 @@ def run_from_sink(
     clean_table: str,
     limit: int,
 ) -> int:
-    """Read Cloud Logging → BQ export rows, find gzip+base64 blobs, fill clean_vulnerabilities."""
+    """Read Cloud Logging → BQ export rows, find gzip+base64 blobs, fill clean_vulnerabilities.
+
+    Important: Trivy emits **plain** stderr lines (INFO, DB download) alongside **rare** lines that
+    carry the vulnerability report as base64(gzip(JSON)). Older logic concatenated every line per
+    job, which breaks decoding and makes BQ look 'uncompressed'. We now filter to long base64 runs
+    and decode each candidate separately.
+    """
     client = bigquery.Client(project=project)
-    table_id, total = _find_sink_table(client, project, dataset)
-    LOGGER.info("Using sink table %s (~%s rows)", table_id, total)
+    table_id, _enc_count = _pick_sink_table_for_reports(client, project, dataset)
+    LOGGER.info("Using sink table %s", table_id)
 
     fq = f"`{project}.{dataset}.{table_id}`"
     clean_fq = f"{project}.{dataset}.{clean_table}"
 
-    # Sink tables use Cloud Logging schema (timestamp column is typical; avoid ORDER BY if missing).
-    q = f"""
+    # Prefer rows that contain a long base64 alphabet run (the report transport).
+    q_filtered = f"""
         SELECT timestamp, receiveTimestamp, insertId, textPayload, labels, resource
         FROM {fq}
         WHERE textPayload IS NOT NULL
-        ORDER BY timestamp ASC, insertId ASC
+          AND REGEXP_CONTAINS(textPayload, r'[A-Za-z0-9+/]{{{_MIN_B64_RUN},}}')
+        ORDER BY timestamp DESC
+        LIMIT {limit}
+    """
+    q_fallback = f"""
+        SELECT timestamp, receiveTimestamp, insertId, textPayload, labels, resource
+        FROM {fq}
+        WHERE textPayload IS NOT NULL
+        ORDER BY LENGTH(textPayload) DESC
         LIMIT {limit}
     """
     rows_to_insert: list[dict[str, Any]] = []
 
     try:
-        job = client.query(q)
-        grouped: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
-        for row in job.result():
+        job = client.query(q_filtered)
+        sink_rows = list(job.result())
+        if not sink_rows:
+            LOGGER.info("No rows matched REGEXP base64 heuristic; trying longest textPayload lines.")
+            sink_rows = list(client.query(q_fallback).result())
+
+        for row in sink_rows:
             d = _row_to_nested_dict(row)
             ins = d.get("timestamp") or d.get("receiveTimestamp") or datetime.now(timezone.utc)
-            group_key = _group_key_from_sink_row(d)
             report_name = _report_label_from_sink_row(d)
-            payload = str(d.get("textPayload") or "").strip()
-            if not payload:
+            ns_guess = _namespace_from_sink_row(d)
+            text = str(d.get("textPayload") or "")
+
+            if _looks_like_plain_trivy_status_log(text) and not _B64_RUN_RE.search(text):
                 continue
 
-            grouped.setdefault(
-                group_key,
-                {
-                    "insert_time": ins,
-                    "report_name": report_name,
-                    "namespace": _namespace_from_sink_row(d),
-                    "chunks": [],
-                },
-            )["chunks"].append(payload)
+            for cand in _extract_encoded_candidates(text):
+                try:
+                    decoded = decode_blob(cand)
+                except ValueError as exc:
+                    LOGGER.debug("Skip chunk (report=%s): %s", report_name, exc)
+                    continue
 
-        for group_key, group in grouped.items():
-            try:
-                decoded = decode_blob("".join(group["chunks"]))
-            except ValueError as exc:
-                LOGGER.debug("Skip undecodable sink group %s: %s", group_key, exc)
-                continue
-
-            image = decoded.get("ArtifactName") or decoded.get("artifactName") or decoded.get("image") or ""
-            ns_val = decoded.get("Namespace") or decoded.get("namespace") or group["namespace"] or ""
-
-            for vuln in iter_vulnerabilities(decoded):
-                rows_to_insert.append(
-                    {
-                        "insert_time": _ts_for_bq(group["insert_time"]),
-                        "namespace": str(ns_val) if ns_val is not None else None,
-                        "report_name": str(group["report_name"]) if group["report_name"] else None,
-                        "image": str(image),
-                        "vulnerability_id": vuln.get("VulnerabilityID", ""),
-                        "severity": vuln.get("Severity", ""),
-                        "pkg_name": vuln.get("PkgName", ""),
-                        "installed_version": vuln.get("InstalledVersion", ""),
-                        "fixed_version": vuln.get("FixedVersion", ""),
-                        "title": vuln.get("Title", ""),
-                    }
+                image = (
+                    decoded.get("ArtifactName")
+                    or decoded.get("artifactName")
+                    or decoded.get("image")
+                    or ""
                 )
+                ns_val = decoded.get("Namespace") or decoded.get("namespace") or ns_guess or ""
+
+                for vuln in iter_vulnerabilities(decoded):
+                    rows_to_insert.append(
+                        {
+                            "insert_time": _ts_for_bq(ins),
+                            "namespace": str(ns_val) if ns_val is not None else None,
+                            "report_name": str(report_name) if report_name else None,
+                            "image": str(image),
+                            "vulnerability_id": vuln.get("VulnerabilityID", ""),
+                            "severity": vuln.get("Severity", ""),
+                            "pkg_name": vuln.get("PkgName", ""),
+                            "installed_version": vuln.get("InstalledVersion", ""),
+                            "fixed_version": vuln.get("FixedVersion", ""),
+                            "title": vuln.get("Title", ""),
+                        }
+                    )
 
         if not rows_to_insert:
-            LOGGER.info("No vulnerability rows extracted from sink (no valid compressed reports in sample).")
+            LOGGER.info(
+                "No vulnerability rows extracted from sink. Trigger scans (pods/jobs), wait for "
+                "report-sized log lines, or inspect stdout_* vs stderr_* tables in BigQuery."
+            )
             return 0
 
-        errors = client.insert_rows_json(clean_fq, rows_to_insert, row_ids=[_make_row_id(row) for row in rows_to_insert])
+        errors = client.insert_rows_json(
+            clean_fq, rows_to_insert, row_ids=[_make_row_id(row) for row in rows_to_insert]
+        )
         if errors:
             LOGGER.error("BigQuery insert errors: %s", errors)
             return 1
 
-        LOGGER.info("Inserted %s rows into %s (from sink %s)", len(rows_to_insert), clean_fq, table_id)
+        LOGGER.info("Inserted %s rows into %s (from sink table %s)", len(rows_to_insert), clean_fq, table_id)
         return 0
     except Exception:
         LOGGER.exception("Sink pipeline failed")

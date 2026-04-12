@@ -19,8 +19,12 @@ bq show --format=prettyjson PROJECT_ID:DATASET_ID.TABLE_ID
 
 ## Парсер `parse_trivy_bq.py`
 
-- **`--from-sink`** (рекомендовано): сканує **авто-таблиці** експорту Logging (усі таблиці в dataset, крім `raw_compressed_logs` / `clean_vulnerabilities`), шукає у рядках рядки схожі на base64(gzip(JSON)), декодує та заповнює **`clean_vulnerabilities`** без проміжного ETL.
+- **`--from-sink`** (рекомендовано): обирає sink-таблицю (за можливості ту, де є рядки з **довгим base64-подібним** `textPayload`), декодує кожен кандидат як **base64 → gzip → JSON** і заповнює **`clean_vulnerabilities`**. Раніше зшивались усі рядки логу підряд — через це в BigQuery «виглядало все незжатим» (INFO/Downloading змішувались із звітом).
 - Без `--from-sink`: читає **`raw_compressed_logs`.`log_data`** (додатковий шлях у тестовому завданні).
+
+## Чому в Preview часто видно plain `textPayload`
+
+Потік **stderr** Trivy містить багато **читабельних** рядків (завантаження DB тощо). **Gzip+base64** звіту про CVE з’являється в **інших** рядках — шукайте довгі послідовності `[A-Za-z0-9+/]{96+,}` у `textPayload` або використовуйте `scripts/bq_sink_inspect.py` (автовибір такого рядка). Детальніше: **`docs/reviewer_addendum_bq_and_exploits_uk.md`**.
 
 ## Доказ E2E
 
