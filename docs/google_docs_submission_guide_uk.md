@@ -1,6 +1,6 @@
 # Гайд: як зібрати звіт у Google Docs (текст + скріншоти)
 
-Цей документ описує **як має виглядати звіт з технічного тестового завдання** (репозиторій **apt-defense-lab**): **де** вставляти скріншоти, **які** саме, і **як їх отримати**. Повний текст звіту українською — **`docs/Google_Doc_Report_apt-defense-lab_UK.md`** (імпорт у Google Docs або збірка Word: `python scripts/build_report_docx.py`).
+Цей документ описує **як має виглядати звіт з технічного тестового завдання** (репозиторій **apt-defense-lab**): **де** вставляти скріншоти, **які** саме, і **як їх отримати**. Повний текст звіту українською — **`docs/Google_Doc_Report_apt-defense-lab_UK.md`** (імпорт у Google Docs або збірка Word: `python scripts/build_report_docx.py`). Детальний план під вимоги рецензента (gzip у BQ, linux.git, kubernetes.git, CVE) — **`docs/evidence_upstream_kernel_and_k8s_uk.md`**.
 
 ---
 
@@ -55,6 +55,8 @@
 |----|-------------|-------------|
 | **S-ESC-1** | Термінал: вивід скрипта або повідомлення про блок | Локально/Cloud Shell: `gcloud container clusters get-credentials …`, под на `vulnerable-pool` за README експлойту, `bash exploits/container_escape/escape.sh`. Скрін вікна терміналу з результатом. |
 | **S-ESC-2** | (Опційно) Файл-доказ на ноді або в контейнері, як у README експлойту | Якщо скрипт створює файл — `kubectl exec` / SSH до ноди **лише в ізольованому тестовому середовищі** — скрін `cat` або вмісту. |
+| **S-KERNEL-1** | **Обов’язково для рецензента:** фрагмент **`kernel/cgroup/cgroup-v1.c`** (функція `cgroup_release_agent_write`) з **клону torvalds/linux** або веб-переглядача GitHub на **конкретному tag/commit** | Клонуйте Linux (див. `docs/evidence_upstream_kernel_and_k8s_uk.md`), відкрийте файл у IDE — скрін з видимим шляхом/URL. Додайте короткі коментарі в Google Doc поруч зі скріном. |
+| **S-KERNEL-2** | (Опційно) GDB/kgdb: зупинка в `cgroup_release_agent_write` | Лише якщо є тестова VM з ядром debug; інакше у тексті звіту поясніть обмеження. |
 
 ### 3.2 Control-plane stress
 
@@ -62,6 +64,9 @@
 |----|-------------|-------------|
 | **S-DOS-1** | Термінал: запуск `dos_apiserver.sh` + фрагмент виводу | `COUNT=500 bash exploits/master_plane_crash/dos_apiserver.sh default` (або менше для демо). |
 | **S-DOS-2** | Затримка або помилка `kubectl` «до/після» | Два скріни або один з таймстампом: `time kubectl get nodes` під час/після навантаження. |
+| **Текстом у звіті** | Яку **CVE з бюлетеню GKE** ви обрали для DoS API | Вкажіть **CVE-2019-11254** і речення зв’язку з PoC (див. `exploits/master_plane_crash/README.md`, `docs/evidence_upstream_kernel_and_k8s_uk.md`). |
+| **S-K8S-CODE-1** | Фрагмент коду з **`kubernetes/kubernetes`** (створення ConfigMap / generic store) | Клон репозиторію, відкрити `pkg/registry/core/configmap/...` або `store.go` — скрін IDE. |
+| **S-K8S-DEBUG-1** | (Опційно) dlv на apiserver | Лише для **локального** kind/kubeadm; на GKE керований control plane недоступний — у звіті опишіть це. |
 
 ---
 
@@ -79,7 +84,7 @@
 | **S-CB-2** | Успішний білд **`deploy-gke-apps.yaml`** (Helm, `apply_network_policies`) | Після `gcloud builds submit --config=cloudbuild/deploy-gke-apps.yaml …` — скрін History або логу кроку з `helm` / `apply_network_policies.sh`. |
 | **S-CB-3** | (Опційно) Білд **`run-trivy-parser.yaml`** або локальний вивід парсера | Submit парсера або термінал: `python scripts/parse_trivy_bq.py --project … --from-sink` — скрін рядка `Inserted N rows…` або пояснення N=0. |
 | **S-BQ-2** | BigQuery: **Preview** таблиці **`clean_vulnerabilities`** (колонки CVE, severity тощо) | BigQuery → таблиця → **Preview**. Якщо порожньо — скрін + короткий підпис у тексті, що логи ще не накопичились. |
-| **S-BQ-3** | (Опційно) Один рядок **sink**-таблиці (managed Logging) | Або вивід `python scripts/bq_sink_inspect.py --project … --dataset trivy_logs` — скрін терміналу. |
+| **S-BQ-3** | **Обов’язково:** один рядок **sink**-таблиці, де в `textPayload` видно **довгий base64** (часто починається з `H4sI` — gzip у base64), а не лише `INFO …` | BigQuery Preview або `python scripts/bq_sink_inspect.py --project … --dataset trivy_logs`. Підпис: стислий транспорт звіту Trivy (gzip→base64). |
 | **S-TRIVY-1** | `scanJob.compressLogs: true` | `kubectl get cm trivy-operator-config -n trivy-system -o yaml` — скрін фрагмента з `compressLogs`. |
 
 ---
@@ -122,11 +127,13 @@
 ## Чекліст перед експортом у PDF / здачею
 
 - [ ] S-GKE-1, S-BQ-1  
-- [ ] Мінімум один з S-ESC / S-DOS  
-- [ ] S-CB-1, S-CB-2, S-BQ-2 (або пояснення чому даних немає)  
+- [ ] Мінімум один з S-ESC / S-DOS; **S-KERNEL-1** (linux `cgroup-v1.c`); **S-K8S-CODE-1** (kubernetes)  
+- [ ] **S-BQ-3** (gzip/base64 у sink), S-TRIVY-1, S-CB-1, S-CB-2, S-BQ-2 (або пояснення чому даних немає)  
+- [ ] У тексті: **CVE-2019-11254** (DoS) з бюлетеню GKE + зв’язок з PoC  
 - [ ] S-GH-1 (vulnerable PR) + S-GH-2 (hardened push) + S-DEMO-1 (apply)  
 - [ ] S-FALCO-1 або S-NP-1  
 - [ ] Усі скріни підписані одним реченням контексту  
+- [ ] Оновлений Word/Google Doc зібраний з актуального `docs/Google_Doc_Report_apt-defense-lab_UK.md` (або імпорт розділів з `docs/evidence_upstream_kernel_and_k8s_uk.md`)  
 
 ---
 

@@ -12,6 +12,7 @@
 | [**github_actions_runbook.md**](github_actions_runbook.md) | GitHub/GCP, секрети, drift |
 | [**logging_pipeline.md**](logging_pipeline.md) | Sink → BigQuery, парсер |
 | [**architecture_and_stack.md**](architecture_and_stack.md) | Архітектура, діаграми потоків |
+| [**evidence_upstream_kernel_and_k8s_uk.md**](evidence_upstream_kernel_and_k8s_uk.md) | Вимоги рецензента: gzip у BQ, CVE-2022-0492 у linux.git, DoS + CVE з бюлетеню GKE, kubernetes/kubernetes |
 
 Збірка Word зі звіту: `python scripts/build_report_docx.py` → створює `docs/Report02-apt-defense-lab.docx` (не комітиться — див. `.gitignore`).
 

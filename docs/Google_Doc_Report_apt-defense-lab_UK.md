@@ -55,13 +55,19 @@
 
 ### 3.1 Container escape (CVE-2022-0492)
 
-- **PoC:** `exploits/container_escape/escape.sh` (у виводі є мітки `[DEMO]`).
-- **S-ESC-1:** термінал з результатом скрипта (успіх або блок, наприклад cgroup v2).
+- **PoC у репозиторії:** `exploits/container_escape/escape.sh` (мітки `[DEMO]`).
+- **Що вимагає рецензент (upstream, не заглушка):** відкрити в клоні **Linux** файл **`kernel/cgroup/cgroup-v1.c`**, функцію **`cgroup_release_agent_write`** — показати у звіті **фрагмент коду з linux.git** з короткими коментарями, де саме пов’язаний з CVE-2022-0492 ланцюжок `release_agent`. Опційно: **GDB/kgdb** на ядрі з `break cgroup_release_agent_write` і перегляд буфера зі шляхом до агента (детально — **`docs/evidence_upstream_kernel_and_k8s_uk.md`**).
+- **S-ESC-1:** термінал з результатом `escape.sh` (успіх або блок, наприклад cgroup v2).
+- **S-KERNEL-1:** скрін IDE з **оригінальним** фрагментом `cgroup-v1.c` (видно шлях до клону або URL коміту на GitHub).
+- **S-KERNEL-2:** (за можливості) GDB/kgdb на тестовій VM з ядром debug — зупинка в `cgroup_release_agent_write` та змінні.
 
-### 3.2 Control-plane stress
+### 3.2 Control-plane stress і CVE з бюлетеню Google
 
 - **Скрипт:** `exploits/master_plane_crash/dos_apiserver.sh` (`COUNT`, `[DEMO]` у логах).
-- **S-DOS-1 / S-DOS-2:** фрагмент виконання та/або `time kubectl get nodes` до/після.
+- **CVE з [GKE Security Bulletins](https://cloud.google.com/kubernetes-engine/security-bulletins) для сценарію DoS API server:** **CVE-2019-11254** (відмова в обслуговуванні kube-apiserver; у бюлетені Google з посиланням на Kubernetes PSC). Лабораторний PoC демонструє **навантаження через масове створення ConfigMap** — той самий **клас** ризику для control plane (вичерпання ресурсів API/etcd); механізм відрізняється від «crafted YAML» у формулюванні CVE — це варто одним реченням пояснити у звіті (див. **`docs/evidence_upstream_kernel_and_k8s_uk.md`**).
+- **Код Kubernetes (upstream):** у локальному клоні **`kubernetes/kubernetes`** показати фрагмент шляху реєстрації/створення **ConfigMap** (наприклад `pkg/registry/core/configmap/...`, загальний store — `staging/src/k8s.io/apiserver/pkg/registry/generic/registry/store.go`) — **S-K8S-CODE-1**.
+- **S-DOS-1 / S-DOS-2:** фрагмент виконання `dos_apiserver.sh` та/або `time kubectl get nodes` до/після.
+- **S-K8S-DEBUG-1:** (якщо є локальний kind/kubeadm з власним apiserver) опційно скрін **dlv** на бінарнику apiserver; для **GKE керованого** control plane це зазвичай **недоступно** — у звіті достатньо пояснити обмеження і надати **анотований код** + метрики деградації з кластера.
 
 ---
 
@@ -98,7 +104,7 @@ python scripts/parse_trivy_bq.py --project devsecopstests --dataset trivy_logs -
 | ID | Що зняти |
 |----|----------|
 | **S-TRIVY-1** | `kubectl get cm trivy-operator-config -n trivy-system -o yaml` — `scanJob.compressLogs: "true"` |
-| **S-BQ-3** | Рядок sink з довгим base64 у `textPayload` або вивід `bq_sink_inspect.py` |
+| **S-BQ-3** | **Обов’язково для рецензента:** рядок sink з довгим base64 (`H4sI…` або довга послідовність) у `textPayload` — це **gzip-навантаження** у транспорті; або скрін `bq_sink_inspect.py` |
 
 ### 4.3 Парсер BigQuery (`scripts/parse_trivy_bq.py`)
 
@@ -110,11 +116,13 @@ python scripts/parse_trivy_bq.py --project devsecopstests --dataset trivy_logs -
 |----|----------|
 | **S-BQ-2** | Preview таблиці `clean_vulnerabilities` (CVE, severity, пакет) |
 
-### 4.4 Відповідь рецензенту: експлойти та «відладчик Kubernetes»
+### 4.4 Відповідь рецензенту: BigQuery, ядро, Kubernetes
 
-**BigQuery / компресія та експлойти:** див. **Додаток B** нижче (повний текст відповіді рецензента). У скриптах експлойтів — вивід **`[DEMO]`**; опційно **`demos/cgroup_escape_trace_stub.go`**.
+Повний покроковий план (gzip у BQ, **`cgroup-v1.c`**, **CVE-2019-11254**, клон **`kubernetes/kubernetes`**, чесні обмеження щодо **dlv** на GKE) — у **`docs/evidence_upstream_kernel_and_k8s_uk.md`**.
 
-**Що свідомо не входить у обсяг лабораторії:** повна перекомпіляція вихідного коду Kubernetes з підключенням **dlv** до `kube-apiserver` — окремий великий проєкт; у звіті достатньо посилань на бюлетені GKE, анотовані скрипти та цей абзац.
+**Коротко:** скрипти в `exploits/` — лише лабораторні PoC; для рецензента потрібні **скріни з upstream-коду** (Linux + Kubernetes) і **[S-BQ-3]** з base64 gzip. **`demos/cgroup_escape_trace_stub.go`** не замінює аналіз ядра.
+
+**GKE:** до керованого `kube-apiserver` **dlv** зазвичи не підключити — у звіті комбінуйте **анотований код** з клону `kubernetes/kubernetes` і вимір деградації API під час `dos_apiserver.sh`; **dlv** — опційно на **локальному** кластері (kind тощо).
 
 ---
 
@@ -161,9 +169,10 @@ python scripts/parse_trivy_bq.py --project devsecopstests --dataset trivy_logs -
 ## Додаток A. Чекліст скріншотів
 
 - S-GKE-1, S-BQ-1  
-- S-ESC-1 або S-DOS-1  
-- S-CB-1, S-CB-2, S-TRIVY-1, S-BQ-2  
-- опційно: S-BQ-3, S-CB-3  
+- S-ESC-1 або S-DOS-1; **S-KERNEL-1** (фрагмент `cgroup-v1.c`); за можливості S-KERNEL-2  
+- **S-BQ-3** (gzip/base64 у sink), S-TRIVY-1, S-CB-1, S-CB-2, S-BQ-2  
+- **S-K8S-CODE-1** (фрагмент `kubernetes/kubernetes` про створення ConfigMap / store); опційно S-K8S-DEBUG-1  
+- опційно: S-CB-3  
 - S-GH-1 … S-DEMO-1  
 - S-FALCO-1 або S-NP-1  
 
@@ -192,13 +201,13 @@ python scripts/bq_sink_inspect.py --project PROJECT_ID --dataset trivy_logs
 python scripts/parse_trivy_bq.py --project PROJECT_ID --dataset trivy_logs --from-sink -v
 ```
 
-### B.2 Експлойти, локальний K8s, відладчик
+### B.2 Експлойти vs upstream (Linux / Kubernetes)
 
-У `escape.sh` та `dos_apiserver.sh` додано етапи **`[DEMO]`**; опційно **`demos/cgroup_escape_trace_stub.go`**.
+У `escape.sh` та `dos_apiserver.sh` — етапи **`[DEMO]`** для стенду. Для тексту звіту рецензент очікує **посилання на реальні дерева**: **`kernel/cgroup/cgroup-v1.c`** (CVE-2022-0492) та **kubernetes/kubernetes** (створення ресурсів, контекст **CVE-2019-11254** з бюлетеню GKE). Деталі — **`docs/evidence_upstream_kernel_and_k8s_uk.md`**.
 
-**Не входить у обсяг типового ТЗ без окремого завдання:** форк **kubernetes/kubernetes**, `klog` у ядрі оркестратора, **dlv** на реальному `kube-apiserver`.
+**Не плутати з доказом:** **`demos/cgroup_escape_trace_stub.go`** — лише навчальна ілюстрація гілок.
 
-**Код демо:** `exploits/container_escape/escape.sh`, `exploits/master_plane_crash/dos_apiserver.sh`, `exploits/container_escape/escape-pod.yaml`.
+**Файли PoC у репозиторії:** `exploits/container_escape/escape.sh`, `exploits/master_plane_crash/dos_apiserver.sh`, `exploits/container_escape/escape-pod.yaml`.
 
 ---
 

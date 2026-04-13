@@ -1,5 +1,11 @@
 # aquasecurity/trivy-operator chart 0.32.1
 # helm install trivy-operator aquasecurity/trivy-operator -n trivy-system --version 0.32.1 -f values.yaml
+#
+# Стиснення логів scan job (gzip у транспорті до Cloud Logging) у цьому chart
+# задається НЕ випадковими ключами під "trivy:", а полем ConfigMap оператора:
+#   data.scanJob.compressLogs: "true"
+# Після встановлення виконайте (див. README):
+#   bash scripts/configure_trivy_log_compression.sh
 
 operator:
   vulnerabilityScannerEnabled: true

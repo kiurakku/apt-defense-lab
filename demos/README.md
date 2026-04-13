@@ -1,6 +1,6 @@
 # Demos (optional)
 
-- **`cgroup_escape_trace_stub.go`** — мінімальна Go-програма з виводом етапів і «змінних» для пояснення логіки (не експлойт і не частина Kubernetes).
+- **`cgroup_escape_trace_stub.go`** — мінімальна Go-програма з виводом етапів (не експлойт і не частина Kubernetes). **Не використовуйте як основний доказ для рецензента:** для CVE-2022-0492 потрібен аналіз **`kernel/cgroup/cgroup-v1.c`** у дереві **torvalds/linux** (див. `docs/evidence_upstream_kernel_and_k8s_uk.md`).
 
 Запуск (локально, якщо встановлено Go):
 
